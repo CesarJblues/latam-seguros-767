@@ -22,7 +22,7 @@ if btn_login:
     elif not correo.endswith("@latam.com") and correo != "":
         st.sidebar.error("Acceso denegado. Debe usar correo de LATAM.")
 
-# 3. FUNCIÓN DEL MAPA (AHORA CON DETECCIÓN DE CLICS)
+# 3. FUNCIÓN DEL MAPA 
 def dibujar_mapa():
     posiciones = {
         "1": {"x": [1.5], "y": [10]}, "2L": {"x": [1], "y": [9]}, "2R": {"x": [2], "y": [9]},
@@ -36,15 +36,13 @@ def dibujar_mapa():
             x=datos["x"], y=datos["y"], mode='markers+text',
             marker=dict(size=45, symbol='square', color=color, line=dict(width=2, color='white')),
             text=[nombre], textposition="middle center", textfont=dict(color="white", size=12),
-            name=f"Posición {nombre}", 
-            customdata=[f"Posición {nombre}"], # <-- ESTO GUARDA EL NOMBRE PARA EL CLIC
-            hoverinfo="text"
+            name=f"Posición {nombre}", customdata=[f"Posición {nombre}"], hoverinfo="text"
         ))
     fig.update_layout(
-        title="Plano Main Deck (¡Toca un Cut!)", xaxis=dict(showgrid=False, range=[0, 3], visible=False),
+        title="Plano Main Deck", xaxis=dict(showgrid=False, range=[0, 3], visible=False),
         yaxis=dict(showgrid=False, range=[0, 11], visible=False),
         width=300, height=500, plot_bgcolor="white", showlegend=False, margin=dict(l=0, r=0, t=30, b=0),
-        clickmode='event+select' # <-- ESTO ACTIVA LA INTERACTIVIDAD
+        clickmode='event+select'
     )
     return fig
 
@@ -55,10 +53,7 @@ if st.session_state.autenticado:
     
     with col1:
         st.info("👇 **PASO 1:** Haz clic en un Cut del mapa.")
-        # Aquí le decimos a Streamlit que capture el clic (on_select="rerun")
         mapa_evento = st.plotly_chart(dibujar_mapa(), use_container_width=True, on_select="rerun")
-        
-        # Leemos qué posición tocó el usuario
         pos_seleccionada = None
         if mapa_evento and "selection" in mapa_evento and mapa_evento["selection"]["points"]:
             pos_seleccionada = mapa_evento["selection"]["points"][0]["customdata"]
@@ -69,41 +64,60 @@ if st.session_state.autenticado:
         
         if avion != "Seleccionar...":
             if not pos_seleccionada:
-                st.warning("👈 Por favor, selecciona una posición tocando directamente los cuadros de colores en el mapa de la izquierda.")
+                st.warning("👈 Por favor, selecciona una posición tocando el mapa de la izquierda.")
             else:
-                # El sistema ya sabe qué posición tocaste y te lo confirma
-                st.success(f"📍 Has seleccionado la **{pos_seleccionada}**")
+                st.success(f"📍 Analizando la **{pos_seleccionada}**")
                 st.write("---")
                 
-                st.markdown(f"### 🔍 Esquema de Seguros en {pos_seleccionada}")
-                st.info("**PASO 3:** Marca en el diagrama inferior los seguros que están INOPERATIVOS:")
+                st.markdown(f"### 🔍 Radiografía de la Paleta")
+                st.info("**PASO 3:** Toca los interruptores ubicados alrededor de la paleta para simular la posición física de los seguros inoperativos:")
                 
                 inoperativos = []
                 
-                # Radiografía de la Paleta
-                st.markdown("#### ⬆️ Lado Frontal (FWD)")
-                c1, c2 = st.columns(2)
-                with c1:
-                    if st.checkbox("❌ FWD Inboard"): inoperativos.append("FWD_IN")
-                with c2:
-                    if st.checkbox("❌ FWD Outboard"): inoperativos.append("FWD_OUT")
+                # ==========================================
+                # EL NUEVO DISEÑO ESPACIAL (TOP-DOWN VIEW)
+                # ==========================================
+                c_izq, c_centro, c_der = st.columns([1, 2, 1])
                 
-                st.write("") 
-                st.markdown("#### ↔️ Laterales (SIDE)")
-                c3, c4 = st.columns(2)
-                with c3:
-                    if st.checkbox("❌ Lateral FWD"): inoperativos.append("SIDE_FWD")
-                with c4:
-                    if st.checkbox("❌ Lateral AFT"): inoperativos.append("SIDE_AFT")
+                with c_centro:
+                    # Seguros FWD (Ubicados físicamente arriba)
+                    st.markdown("<div style='text-align:center;'><b>⬆️ FRENTE (FWD) ⬆️</b></div>", unsafe_allow_html=True)
+                    f1, f2 = st.columns(2)
+                    with f1: 
+                        if st.toggle("FWD Inboard"): inoperativos.append("FWD_IN")
+                    with f2: 
+                        if st.toggle("FWD Outboard"): inoperativos.append("FWD_OUT")
                     
-                st.write("") 
-                st.markdown("#### ⬇️ Lado Trasero (AFT)")
-                c5, c6 = st.columns(2)
-                with c5:
-                    if st.checkbox("❌ AFT Inboard"): inoperativos.append("AFT_IN")
-                with c6:
-                    if st.checkbox("❌ AFT Outboard"): inoperativos.append("AFT_OUT")
+                    # Dibujo de la Paleta Central
+                    st.markdown("""
+                    <div style='background-color:#d9e2ec; border:3px dashed #627d98; border-radius:10px; height:180px; display:flex; align-items:center; justify-content:center; flex-direction:column; margin: 15px 0; box-shadow: 2px 2px 5px rgba(0,0,0,0.1);'>
+                        <h2 style='color:#102a43; margin:0;'>📦 PALETA</h2>
+                        <p style='color:#334e68; margin:0;'>Vista Superior</p>
+                    </div>
+                    """, unsafe_allow_html=True)
                     
+                    # Seguros AFT (Ubicados físicamente abajo)
+                    a1, a2 = st.columns(2)
+                    with a1: 
+                        if st.toggle("AFT Inboard"): inoperativos.append("AFT_IN")
+                    with a2: 
+                        if st.toggle("AFT Outboard"): inoperativos.append("AFT_OUT")
+                    st.markdown("<div style='text-align:center;'><b>⬇️ ATRÁS (AFT) ⬇️</b></div>", unsafe_allow_html=True)
+                    
+                with c_izq:
+                    # Seguros Laterales (Ubicados físicamente a la izquierda)
+                    st.write("<div style='height: 90px;'></div>", unsafe_allow_html=True)
+                    if st.toggle("Lateral FWD"): inoperativos.append("SIDE_FWD")
+                    st.write("<div style='height: 10px;'></div>", unsafe_allow_html=True)
+                    if st.toggle("Lateral AFT"): inoperativos.append("SIDE_AFT")
+                
+                with c_der:
+                    # Espacio visual para mantener el diseño centrado (Rieles derechos)
+                    st.write("<div style='height: 90px;'></div>", unsafe_allow_html=True)
+                    st.markdown("<span style='color:gray; font-size:12px;'>*Riel lateral externo*</span>", unsafe_allow_html=True)
+
+                # ==========================================
+                
                 # MOTOR DE CÁLCULO
                 st.write("---")
                 if len(inoperativos) == 0:
@@ -118,6 +132,6 @@ if st.session_state.autenticado:
                         st.markdown("**Motivo:** Falla de 1 seguro frontal. Penalización aplicada.")
                     else:
                         st.markdown("#### Restricción: Calculando...")
-                        st.markdown(f"Fallas detectadas: {', '.join(inoperativos)}")
+                        st.markdown(f"Fallas registradas: {', '.join(inoperativos)}")
 else:
     st.info("👈 Por favor, inicie sesión en el menú lateral izquierdo para utilizar la herramienta.")
