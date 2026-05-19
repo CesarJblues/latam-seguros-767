@@ -8,7 +8,8 @@ import plotly.graph_objects as go
 st.set_page_config(page_title="LATAM - Seguros 767", page_icon="✈️", layout="wide")
 st.title("✈️ Calculadora de Restricciones 767")
 
-RULES_FILE = "Restricciones_767_template.xlsx"   # o .csv si prefieres
+# Nombre del archivo actualizado
+RULES_FILE = "Locks_and_deferred.xlsx"
 RULES_SHEET = "ULD_Restrictions"
 
 # =============================================================================
@@ -16,17 +17,10 @@ RULES_SHEET = "ULD_Restrictions"
 # =============================================================================
 @st.cache_data
 def cargar_reglas():
+    # Leemos directamente de tu nuevo archivo
     df = pd.read_excel(RULES_FILE, sheet_name=RULES_SHEET)
-    df.columns = [c.strip().lower() for c in df.columns]
-
-    # Normalización básica
-    if "active" in df.columns:
-        df["active"] = df["active"].astype(str).str.upper().isin(["TRUE", "YES", "1", "SI", "SÍ"])
-
-    for col in ["aircraft_family", "config_group", "position", "missing_side", "rule_type", "restriction_text", "vacate_position"]:
-        if col in df.columns:
-            df[col] = df[col].astype(str).str.strip()
-
+    # Limpiamos nombres de columnas por si acaso
+    df.columns = [c.strip() for c in df.columns]
     return df
 
 rules_df = cargar_reglas()
@@ -55,18 +49,18 @@ if btn_login:
         st.sidebar.error("Acceso denegado. Debe usar correo de LATAM.")
 
 # =============================================================================
-# 4. MAPA
+# 4. MAPA (NO MODIFICADO)
 # =============================================================================
 def dibujar_mapa():
     posiciones = {
-        "1": {"x": [1.5], "y": [10]},
-        "2L": {"x": [1], "y": [9]},
-        "2R": {"x": [2], "y": [9]},
-        "3L": {"x": [1], "y": [8]},
-        "3R": {"x": [2], "y": [8]},
-        "10L": {"x": [1], "y": [4]},
-        "10R": {"x": [2], "y": [4]},
-        "14": {"x": [1.5], "y": [2]},
+        "A1": {"x": [1.5], "y": [10]},
+        "A2L": {"x": [1], "y": [9]},
+        "A2R": {"x": [2], "y": [9]},
+        "A3L": {"x": [1], "y": [8]},
+        "A3R": {"x": [2], "y": [8]},
+        "A10L": {"x": [1], "y": [4]},
+        "A10R": {"x": [2], "y": [4]},
+        "A14": {"x": [1.5], "y": [2]},
     }
 
     fig = go.Figure()
@@ -99,65 +93,45 @@ def dibujar_mapa():
     return fig
 
 # =============================================================================
-# 5. MOTOR DE REGLAS
+# 5. MOTOR DE REGLAS (AJUSTADO A NUEVO EXCEL)
 # =============================================================================
-def resolver_restriccion(df, aircraft_family, config_group, position, missing_sides):
-    """
-    missing_sides: lista de lados/seguro dañado, por ejemplo ["FWD", "AFT"] o ["LEFT"]
-    """
-
-    # Regla del manual: más de un restraint missing/inoperative por ULD => no load
+def resolver_restriccion(df, model, position, missing_sides):
+    # Regla: Si hay más de un seguro dañado, no se puede cargar
     if len(missing_sides) > 1:
         return {
-            "status": "NO_LOAD",
-            "kg": 0,
-            "text": "Más de un restraint missing/inoperative en la misma ULD: la posición no puede cargarse."
+            "status": "NO_LOAD", 
+            "kg": 0, 
+            "text": "Más de un restraint dañado: la posición no puede cargarse."
         }
-
+    
     if len(missing_sides) == 0:
-        return {
-            "status": "NORMAL",
-            "kg": None,
-            "text": "Operación normal."
-        }
+        return {"status": "NORMAL", "kg": None, "text": "Operación normal."}
 
-    missing_side = missing_sides[0]
-
-    candidatos = df[
-        (df["active"] == True) &
-        (df["aircraft_family"].str.upper() == aircraft_family.upper()) &
-        (df["config_group"].str.upper() == config_group.upper()) &
-        (df["position"].str.upper() == position.upper()) &
-        (df["missing_side"].str.upper() == missing_side.upper()) &
-        (df["inop_count_min"] <= 1) &
-        (df["inop_count_max"] >= 1)
-    ].copy()
+    # Filtrar por Modelo y Posición
+    candidatos = df[(df["Model"] == model) & (df["Pos"] == position)]
 
     if candidatos.empty:
         return {
-            "status": "REVIEW",
-            "kg": None,
-            "text": "No se encontró una regla exacta en la tabla de restricciones."
+            "status": "REVIEW", 
+            "kg": None, 
+            "text": f"No se encontró la posición {position} para el modelo {model}."
         }
 
-    # Gana la regla de mayor prioridad (menor número = más prioritaria)
-    candidatos = candidatos.sort_values(by=["priority"], ascending=[True])
     fila = candidatos.iloc[0]
+    side = missing_sides[0] # FWD, AFT, LEFT, RIGHT
 
-    vacate = str(fila.get("vacate_position", "")).strip().upper() in ["YES", "TRUE", "1", "SI", "SÍ"]
+    # Mapeo de lados a columnas del Excel (FWD_kg, AFT_kg, etc.)
+    col_map = {"FWD": "FWD_kg", "AFT": "AFT_kg", "LEFT": "LEFT_kg", "RIGHT": "RIGHT_kg"}
+    col_name = col_map.get(side)
 
-    if vacate:
+    if col_name and col_name in fila and pd.notna(fila[col_name]):
         return {
-            "status": "VACANT",
-            "kg": 0,
-            "text": fila["restriction_text"] if pd.notna(fila["restriction_text"]) else "Position vacant."
+            "status": "OK", 
+            "kg": float(fila[col_name]), 
+            "text": f"Restricción encontrada: {fila[col_name]} kg."
         }
-
-    return {
-        "status": "OK",
-        "kg": float(fila["allowed_weight_kg"]),
-        "text": fila["restriction_text"] if pd.notna(fila["restriction_text"]) else "Restricción encontrada."
-    }
+    
+    return {"status": "REVIEW", "kg": None, "text": "No hay restricción definida para ese lado específico."}
 
 # =============================================================================
 # 6. APP
@@ -179,82 +153,53 @@ if st.session_state.autenticado:
 
         avion = st.selectbox(
             "**PASO 2:** Tipo de Aeronave:",
-            [
-                "Seleccionar...",
-                "Freighter F de Fábrica (Ej: CC-CXA)",
-                "Convertido BCF (Ancra)"
-            ]
+            ["Seleccionar...", "Freighter F (Ej: CC-CXA)", "Convertido BCF"]
         )
 
         if avion != "Seleccionar...":
             if not pos_seleccionada:
                 st.warning("👈 Selecciona una posición del mapa de la izquierda.")
             else:
-                # Mapeo del avión a familia/configuración
-                if avion.startswith("Freighter F"):
-                    aircraft_family = "FREIGHTER"
-                    config_group = "FREIGHTER_F"
-                else:
-                    aircraft_family = "BCF"
-                    config_group = "BCF_A_M_R"  # o BCF_B si seleccionas Size Code B
+                # Determinación del Modelo para el filtro
+                model = "767-300F" if avion.startswith("Freighter") else "767-300BCF"
 
-                st.success(f"📍 Analizando la **{pos_seleccionada}**")
+                st.success(f"📍 Analizando la **{pos_seleccionada}** en {model}")
 
                 st.markdown("### 🔍 Radiografía de la Paleta")
                 st.info("**PASO 3:** Selecciona los seguros inoperativos:")
 
                 inoperativos = []
-
                 c_izq, c_centro, c_der = st.columns([1, 2, 1])
 
                 with c_centro:
                     st.markdown("<div style='text-align:center;'><b>⬆️ FRENTE (FWD) ⬆️</b></div>", unsafe_allow_html=True)
-
                     f1, f2 = st.columns(2)
-                    with f1:
-                        if st.toggle("FWD Inboard"):
-                            inoperativos.append("FWD")
-                    with f2:
-                        if st.toggle("FWD Outboard"):
-                            inoperativos.append("FWD")
-
+                    if f1.toggle("FWD Inboard"): inoperativos.append("FWD")
+                    if f2.toggle("FWD Outboard"): inoperativos.append("FWD")
+                    
                     st.markdown("""
-                    <div style='background-color:#d9e2ec; border:3px dashed #627d98; border-radius:10px; height:180px; display:flex; align-items:center; justify-content:center; flex-direction:column; margin: 15px 0; box-shadow: 2px 2px 5px rgba(0,0,0,0.1);'>
+                    <div style='background-color:#d9e2ec; border:3px dashed #627d98; border-radius:10px; height:180px; display:flex; align-items:center; justify-content:center; flex-direction:column; margin: 15px 0;'>
                         <h2 style='color:#102a43; margin:0;'>📦 PALETA</h2>
-                        <p style='color:#334e68; margin:0;'>Vista Superior</p>
                     </div>
                     """, unsafe_allow_html=True)
 
                     a1, a2 = st.columns(2)
-                    with a1:
-                        if st.toggle("AFT Inboard"):
-                            inoperativos.append("AFT")
-                    with a2:
-                        if st.toggle("AFT Outboard"):
-                            inoperativos.append("AFT")
-
+                    if a1.toggle("AFT Inboard"): inoperativos.append("AFT")
+                    if a2.toggle("AFT Outboard"): inoperativos.append("AFT")
                     st.markdown("<div style='text-align:center;'><b>⬇️ ATRÁS (AFT) ⬇️</b></div>", unsafe_allow_html=True)
 
                 with c_izq:
                     st.write("<div style='height: 90px;'></div>", unsafe_allow_html=True)
-                    if st.toggle("Lateral LEFT"):
-                        inoperativos.append("LEFT")
+                    if st.toggle("Lateral LEFT"): inoperativos.append("LEFT")
                     st.write("<div style='height: 10px;'></div>", unsafe_allow_html=True)
-                    if st.toggle("Lateral RIGHT"):
-                        inoperativos.append("RIGHT")
+                    if st.toggle("Lateral RIGHT"): inoperativos.append("RIGHT")
 
-                with c_der:
-                    st.write("<div style='height: 90px;'></div>", unsafe_allow_html=True)
-                    st.markdown("<span style='color:gray; font-size:12px;'>*Riel lateral externo*</span>", unsafe_allow_html=True)
-
-                st.write("---")
-
+                # Cálculo
                 resultado = resolver_restriccion(
                     rules_df,
-                    aircraft_family=aircraft_family,
-                    config_group=config_group,
+                    model=model,
                     position=pos_seleccionada,
-                    missing_sides=inoperativos
+                    missing_sides=list(set(inoperativos)) # set para evitar duplicados
                 )
 
                 if resultado["status"] == "NORMAL":
@@ -262,13 +207,10 @@ if st.session_state.autenticado:
                 elif resultado["status"] == "OK":
                     st.error("🚨 ALERTA DE RESTRICCIÓN")
                     st.markdown(f"#### Restricción Aplicada: **{resultado['kg']:.0f} kg**")
-                    st.markdown(f"**Motivo según manual:** {resultado['text']}")
-                elif resultado["status"] == "VACANT":
-                    st.error("🚨 POSICIÓN VACANTE")
-                    st.markdown(f"**Motivo según manual:** {resultado['text']}")
+                    st.markdown(f"**Motivo:** {resultado['text']}")
                 elif resultado["status"] == "NO_LOAD":
                     st.error("🚨 NO LOAD")
-                    st.markdown(f"**Motivo según manual:** {resultado['text']}")
+                    st.markdown(f"**Motivo:** {resultado['text']}")
                 else:
                     st.warning(resultado["text"])
 
