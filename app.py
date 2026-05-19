@@ -1,7 +1,7 @@
 import streamlit as st
 import plotly.graph_objects as go
 
-# 1. Configuración de la pestaña
+# 1. Configuración
 st.set_page_config(page_title="LATAM - Seguros 767", page_icon="✈️", layout="wide")
 st.title("✈️ Calculadora de Restricciones 767")
 
@@ -22,12 +22,12 @@ if btn_login:
     elif not correo.endswith("@latam.com") and correo != "":
         st.sidebar.error("Acceso denegado. Debe usar correo de LATAM.")
 
-# 3. FUNCIÓN DEL MAPA VISUAL
+# 3. FUNCIÓN DEL MAPA (AVIÓN COMPLETO)
 def dibujar_mapa():
     posiciones = {
         "1": {"x": [1.5], "y": [10]}, "2L": {"x": [1], "y": [9]}, "2R": {"x": [2], "y": [9]},
         "3L": {"x": [1], "y": [8]}, "3R": {"x": [2], "y": [8]}, "10L": {"x": [1], "y": [4]}, 
-        "10R": {"x": [2], "y": [4]}, "14": {"x": [1.5], "y": [2]} # Muestra simplificada
+        "10R": {"x": [2], "y": [4]}, "14": {"x": [1.5], "y": [2]}
     }
     fig = go.Figure()
     for nombre, datos in posiciones.items():
@@ -49,37 +49,72 @@ def dibujar_mapa():
 if st.session_state.autenticado:
     st.write("---")
     
-    # Base de datos simulada
-    manuales = {
-        "Freighter F de Fábrica (Ej: CC-CXA)": {
-            "Posición 2L": {"FWD": "3,492 KG", "AFT": "3,000 KG", "SIDE": "0 KG (No Load)"},
-            "Posición 10R": {"FWD": "6,032 KG", "AFT": "5,500 KG", "SIDE": "2,000 KG"}
-        },
-        "Convertido BCF (Ej: N526LA)": {
-            "Posición 2L (Ancra)": {"FWD": "2,800 KG", "AFT": "2,500 KG", "SIDE": "500 KG"},
-            "Posición 14": {"FWD": "4,000 KG", "AFT": "3,800 KG", "SIDE": "1,000 KG"}
-        }
-    }
-    
-    # Dividimos la pantalla en dos columnas (Mapa a la izquierda, Menús a la derecha)
     col1, col2 = st.columns([1, 1.5])
     
     with col1:
         st.plotly_chart(dibujar_mapa(), use_container_width=True)
         
     with col2:
-        st.subheader("Configuración de Falla")
-        avion = st.selectbox("1. Tipo de Aeronave:", ["Seleccionar..."] + list(manuales.keys()))
+        st.subheader("Configuración de la Posición")
+        avion = st.selectbox("1. Tipo de Aeronave:", ["Seleccionar...", "Freighter F de Fábrica (Ej: CC-CXA)", "Convertido BCF (Ancra)"])
         
         if avion != "Seleccionar...":
-            pos = st.selectbox("2. Posición (Cut):", ["Seleccionar..."] + list(manuales[avion].keys()))
+            pos = st.selectbox("2. Posición (Cut):", ["Seleccionar...", "Posición 2L", "Posición 10R"])
+            
             if pos != "Seleccionar...":
-                falla = st.selectbox("3. Seguro Dañado:", ["Seleccionar..."] + list(manuales[avion][pos].keys()))
+                st.write("---")
+                st.markdown(f"### 🔍 Esquema de Seguros en {pos}")
+                st.info("Marca en el diagrama los seguros que se encuentran **INOPERATIVOS / DAÑADOS**:")
                 
-                if falla != "Seleccionar...":
-                    restriccion = manuales[avion][pos][falla]
-                    st.write("---")
-                    st.error("🚨 **ALERTA DE RESTRICCIÓN (MEL)**")
-                    st.markdown(f"### Peso máximo en {pos}: **{restriccion}**")
+                # --- AQUÍ EMPIEZA LA MAGIA VISUAL (SIMULANDO EL MANUAL) ---
+                inoperativos = []
+                
+                # Simulamos la vista desde arriba de la paleta
+                st.markdown("#### ⬆️ Lado Frontal (FWD)")
+                c1, c2 = st.columns(2)
+                with c1:
+                    if st.checkbox("❌ Seguro FWD Inboard"): inoperativos.append("FWD_IN")
+                with c2:
+                    if st.checkbox("❌ Seguro FWD Outboard"): inoperativos.append("FWD_OUT")
+                
+                st.write("") # Espacio
+                st.markdown("#### ↔️ Laterales (SIDE)")
+                c3, c4 = st.columns(2)
+                with c3:
+                    if st.checkbox("❌ Lateral FWD"): inoperativos.append("SIDE_FWD")
+                with c4:
+                    if st.checkbox("❌ Lateral AFT"): inoperativos.append("SIDE_AFT")
+                    
+                st.write("") # Espacio
+                st.markdown("#### ⬇️ Lado Trasero (AFT)")
+                c5, c6 = st.columns(2)
+                with c5:
+                    if st.checkbox("❌ Seguro AFT Inboard"): inoperativos.append("AFT_IN")
+                with c6:
+                    if st.checkbox("❌ Seguro AFT Outboard"): inoperativos.append("AFT_OUT")
+                    
+                # --- MOTOR DE CÁLCULO DE RESTRICCIONES ---
+                st.write("---")
+                if len(inoperativos) == 0:
+                    st.success("✅ **TODOS LOS SEGUROS OPERATIVOS.** \n\nPeso máximo normal permitido para esta posición según manual.")
+                else:
+                    st.error("🚨 **ALERTA DE RESTRICCIÓN (MEL / W&B)**")
+                    
+                    # Lógica basada en combinaciones (Ejemplo)
+                    if "FWD_IN" in inoperativos and "FWD_OUT" in inoperativos:
+                        st.markdown("#### Restricción: 0 KG (NO LOAD)")
+                        st.markdown("**Motivo:** Faltan TODOS los seguros frontales (FWD).")
+                        
+                    elif len(inoperativos) == 1 and "FWD_IN" in inoperativos:
+                        st.markdown("#### Restricción: 3,492 KG")
+                        st.markdown("**Motivo:** Falla de 1 seguro frontal. Penalización aplicada.")
+                        
+                    elif "SIDE_FWD" in inoperativos or "SIDE_AFT" in inoperativos:
+                        st.markdown("#### Restricción: 2,100 KG")
+                        st.markdown("⚠️ **Atención:** Verifique que la posición adyacente no tenga fallas laterales también.")
+                        
+                    else:
+                        st.markdown("#### Restricción: Calculando configuración especial...")
+                        st.markdown(f"Fallas detectadas: {', '.join(inoperativos)}")
 else:
     st.info("👈 Por favor, inicie sesión en el menú lateral izquierdo para utilizar la herramienta.")
