@@ -8,7 +8,7 @@ import plotly.graph_objects as go
 st.set_page_config(page_title="LATAM - Seguros 767", page_icon="✈️", layout="wide")
 st.title("✈️ Calculadora de Restricciones 767")
 
-RULES_FILE = "ULD_Restrictions.xlsx"   # o .csv si prefieres
+RULES_FILE = "Restricciones_767_template.xlsx"   # o .csv si prefieres
 RULES_SHEET = "ULD_Restrictions"
 
 # =============================================================================
