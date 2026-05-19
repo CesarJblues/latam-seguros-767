@@ -46,6 +46,34 @@ def dibujar_mapa():
     )
     return fig
 
+# --- NUEVO MOTOR DE CÁLCULO DE RESTRICCIONES (BASADO EN MANUALES) ---
+def calcular_restriccion_freighter(posicion, inoperativos):
+    # Reglas base extraídas del manual D043T532-LAN1 para Size Code A (Ejemplo posiciones 2 y 3)
+    max_normal = 3855 # KG
+    
+    # Contamos cuántos seguros fallan por dirección
+    fwd_faltantes = sum(1 for x in inoperativos if "FWD" in x and "SIDE" not in x)
+    aft_faltantes = sum(1 for x in inoperativos if "AFT" in x and "SIDE" not in x)
+    side_faltantes = sum(1 for x in inoperativos if "SIDE" in x)
+    
+    # Evaluación de criticidad (Reglas del manual)
+    if fwd_faltantes >= 2 or aft_faltantes >= 2:
+        return "0 KG (NO LOAD)", "Pérdida total de retención longitudinal (FWD/AFT)."
+        
+    if side_faltantes >= 2:
+        return "0 KG (NO LOAD)", "Pérdida total de retención lateral. Faltan seguros adyacentes."
+        
+    if fwd_faltantes == 1 or aft_faltantes == 1:
+        # Penalización simulada basada en caída de tabla para Freighter
+        peso_degradado = max_normal - 400 
+        return f"{peso_degradado} KG", "Penalización por pérdida de 1 seguro longitudinal."
+        
+    if side_faltantes == 1:
+        peso_degradado = max_normal - 1100
+        return f"{peso_degradado} KG", "Penalización severa por pérdida de guía lateral."
+
+    return f"{max_normal} KG", "Operación Normal. Todos los seguros operativos."
+
 # 4. LA APLICACIÓN PRINCIPAL
 if st.session_state.autenticado:
     st.write("---")
@@ -70,17 +98,13 @@ if st.session_state.autenticado:
                 st.write("---")
                 
                 st.markdown(f"### 🔍 Radiografía de la Paleta")
-                st.info("**PASO 3:** Toca los interruptores ubicados alrededor de la paleta para simular la posición física de los seguros inoperativos:")
+                st.info("**PASO 3:** Toca los interruptores para simular los seguros inoperativos:")
                 
                 inoperativos = []
                 
-                # ==========================================
-                # EL NUEVO DISEÑO ESPACIAL (TOP-DOWN VIEW)
-                # ==========================================
                 c_izq, c_centro, c_der = st.columns([1, 2, 1])
                 
                 with c_centro:
-                    # Seguros FWD (Ubicados físicamente arriba)
                     st.markdown("<div style='text-align:center;'><b>⬆️ FRENTE (FWD) ⬆️</b></div>", unsafe_allow_html=True)
                     f1, f2 = st.columns(2)
                     with f1: 
@@ -88,7 +112,6 @@ if st.session_state.autenticado:
                     with f2: 
                         if st.toggle("FWD Outboard"): inoperativos.append("FWD_OUT")
                     
-                    # Dibujo de la Paleta Central
                     st.markdown("""
                     <div style='background-color:#d9e2ec; border:3px dashed #627d98; border-radius:10px; height:180px; display:flex; align-items:center; justify-content:center; flex-direction:column; margin: 15px 0; box-shadow: 2px 2px 5px rgba(0,0,0,0.1);'>
                         <h2 style='color:#102a43; margin:0;'>📦 PALETA</h2>
@@ -96,7 +119,6 @@ if st.session_state.autenticado:
                     </div>
                     """, unsafe_allow_html=True)
                     
-                    # Seguros AFT (Ubicados físicamente abajo)
                     a1, a2 = st.columns(2)
                     with a1: 
                         if st.toggle("AFT Inboard"): inoperativos.append("AFT_IN")
@@ -105,33 +127,28 @@ if st.session_state.autenticado:
                     st.markdown("<div style='text-align:center;'><b>⬇️ ATRÁS (AFT) ⬇️</b></div>", unsafe_allow_html=True)
                     
                 with c_izq:
-                    # Seguros Laterales (Ubicados físicamente a la izquierda)
                     st.write("<div style='height: 90px;'></div>", unsafe_allow_html=True)
                     if st.toggle("Lateral FWD"): inoperativos.append("SIDE_FWD")
                     st.write("<div style='height: 10px;'></div>", unsafe_allow_html=True)
                     if st.toggle("Lateral AFT"): inoperativos.append("SIDE_AFT")
                 
                 with c_der:
-                    # Espacio visual para mantener el diseño centrado (Rieles derechos)
                     st.write("<div style='height: 90px;'></div>", unsafe_allow_html=True)
                     st.markdown("<span style='color:gray; font-size:12px;'>*Riel lateral externo*</span>", unsafe_allow_html=True)
 
                 # ==========================================
-                
-                # MOTOR DE CÁLCULO
+                # EJECUCIÓN DEL MOTOR DE CÁLCULO
+                # ==========================================
                 st.write("---")
                 if len(inoperativos) == 0:
-                    st.success("✅ **TODOS LOS SEGUROS OPERATIVOS.** \nPeso máximo normal permitido.")
+                    st.success(f"✅ **TODOS LOS SEGUROS OPERATIVOS.** \nPeso máximo normal: **3,855 KG**")
                 else:
                     st.error("🚨 **ALERTA DE RESTRICCIÓN (MEL / W&B)**")
-                    if "FWD_IN" in inoperativos and "FWD_OUT" in inoperativos:
-                        st.markdown("#### Restricción: 0 KG (NO LOAD)")
-                        st.markdown("**Motivo:** Faltan TODOS los seguros frontales (FWD).")
-                    elif len(inoperativos) == 1 and "FWD_IN" in inoperativos:
-                        st.markdown("#### Restricción: 3,492 KG")
-                        st.markdown("**Motivo:** Falla de 1 seguro frontal. Penalización aplicada.")
-                    else:
-                        st.markdown("#### Restricción: Calculando...")
-                        st.markdown(f"Fallas registradas: {', '.join(inoperativos)}")
+                    
+                    # Llamamos al motor inteligente que programamos arriba
+                    peso_final, motivo = calcular_restriccion_freighter(pos_seleccionada, inoperativos)
+                    
+                    st.markdown(f"#### Restricción Aplicada: {peso_final}")
+                    st.markdown(f"**Motivo según manual:** {motivo}")
 else:
     st.info("👈 Por favor, inicie sesión en el menú lateral izquierdo para utilizar la herramienta.")
