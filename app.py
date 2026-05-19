@@ -22,7 +22,7 @@ if btn_login:
     elif not correo.endswith("@latam.com") and correo != "":
         st.sidebar.error("Acceso denegado. Debe usar correo de LATAM.")
 
-# 3. FUNCIÓN DEL MAPA (AVIÓN COMPLETO)
+# 3. FUNCIÓN DEL MAPA (AHORA CON DETECCIÓN DE CLICS)
 def dibujar_mapa():
     posiciones = {
         "1": {"x": [1.5], "y": [10]}, "2L": {"x": [1], "y": [9]}, "2R": {"x": [2], "y": [9]},
@@ -36,48 +36,59 @@ def dibujar_mapa():
             x=datos["x"], y=datos["y"], mode='markers+text',
             marker=dict(size=45, symbol='square', color=color, line=dict(width=2, color='white')),
             text=[nombre], textposition="middle center", textfont=dict(color="white", size=12),
-            name=f"Posición {nombre}", hoverinfo="text"
+            name=f"Posición {nombre}", 
+            customdata=[f"Posición {nombre}"], # <-- ESTO GUARDA EL NOMBRE PARA EL CLIC
+            hoverinfo="text"
         ))
     fig.update_layout(
-        title="Plano Main Deck", xaxis=dict(showgrid=False, range=[0, 3], visible=False),
+        title="Plano Main Deck (¡Toca un Cut!)", xaxis=dict(showgrid=False, range=[0, 3], visible=False),
         yaxis=dict(showgrid=False, range=[0, 11], visible=False),
-        width=300, height=500, plot_bgcolor="white", showlegend=False, margin=dict(l=0, r=0, t=30, b=0)
+        width=300, height=500, plot_bgcolor="white", showlegend=False, margin=dict(l=0, r=0, t=30, b=0),
+        clickmode='event+select' # <-- ESTO ACTIVA LA INTERACTIVIDAD
     )
     return fig
 
 # 4. LA APLICACIÓN PRINCIPAL
 if st.session_state.autenticado:
     st.write("---")
-    
     col1, col2 = st.columns([1, 1.5])
     
     with col1:
-        st.plotly_chart(dibujar_mapa(), use_container_width=True)
+        st.info("👇 **PASO 1:** Haz clic en un Cut del mapa.")
+        # Aquí le decimos a Streamlit que capture el clic (on_select="rerun")
+        mapa_evento = st.plotly_chart(dibujar_mapa(), use_container_width=True, on_select="rerun")
         
+        # Leemos qué posición tocó el usuario
+        pos_seleccionada = None
+        if mapa_evento and "selection" in mapa_evento and mapa_evento["selection"]["points"]:
+            pos_seleccionada = mapa_evento["selection"]["points"][0]["customdata"]
+            
     with col2:
-        st.subheader("Configuración de la Posición")
-        avion = st.selectbox("1. Tipo de Aeronave:", ["Seleccionar...", "Freighter F de Fábrica (Ej: CC-CXA)", "Convertido BCF (Ancra)"])
+        st.subheader("Configuración de Falla")
+        avion = st.selectbox("**PASO 2:** Tipo de Aeronave:", ["Seleccionar...", "Freighter F de Fábrica (Ej: CC-CXA)", "Convertido BCF (Ancra)"])
         
         if avion != "Seleccionar...":
-            pos = st.selectbox("2. Posición (Cut):", ["Seleccionar...", "Posición 2L", "Posición 10R"])
-            
-            if pos != "Seleccionar...":
+            if not pos_seleccionada:
+                st.warning("👈 Por favor, selecciona una posición tocando directamente los cuadros de colores en el mapa de la izquierda.")
+            else:
+                # El sistema ya sabe qué posición tocaste y te lo confirma
+                st.success(f"📍 Has seleccionado la **{pos_seleccionada}**")
                 st.write("---")
-                st.markdown(f"### 🔍 Esquema de Seguros en {pos}")
-                st.info("Marca en el diagrama los seguros que se encuentran **INOPERATIVOS / DAÑADOS**:")
                 
-                # --- AQUÍ EMPIEZA LA MAGIA VISUAL (SIMULANDO EL MANUAL) ---
+                st.markdown(f"### 🔍 Esquema de Seguros en {pos_seleccionada}")
+                st.info("**PASO 3:** Marca en el diagrama inferior los seguros que están INOPERATIVOS:")
+                
                 inoperativos = []
                 
-                # Simulamos la vista desde arriba de la paleta
+                # Radiografía de la Paleta
                 st.markdown("#### ⬆️ Lado Frontal (FWD)")
                 c1, c2 = st.columns(2)
                 with c1:
-                    if st.checkbox("❌ Seguro FWD Inboard"): inoperativos.append("FWD_IN")
+                    if st.checkbox("❌ FWD Inboard"): inoperativos.append("FWD_IN")
                 with c2:
-                    if st.checkbox("❌ Seguro FWD Outboard"): inoperativos.append("FWD_OUT")
+                    if st.checkbox("❌ FWD Outboard"): inoperativos.append("FWD_OUT")
                 
-                st.write("") # Espacio
+                st.write("") 
                 st.markdown("#### ↔️ Laterales (SIDE)")
                 c3, c4 = st.columns(2)
                 with c3:
@@ -85,36 +96,28 @@ if st.session_state.autenticado:
                 with c4:
                     if st.checkbox("❌ Lateral AFT"): inoperativos.append("SIDE_AFT")
                     
-                st.write("") # Espacio
+                st.write("") 
                 st.markdown("#### ⬇️ Lado Trasero (AFT)")
                 c5, c6 = st.columns(2)
                 with c5:
-                    if st.checkbox("❌ Seguro AFT Inboard"): inoperativos.append("AFT_IN")
+                    if st.checkbox("❌ AFT Inboard"): inoperativos.append("AFT_IN")
                 with c6:
-                    if st.checkbox("❌ Seguro AFT Outboard"): inoperativos.append("AFT_OUT")
+                    if st.checkbox("❌ AFT Outboard"): inoperativos.append("AFT_OUT")
                     
-                # --- MOTOR DE CÁLCULO DE RESTRICCIONES ---
+                # MOTOR DE CÁLCULO
                 st.write("---")
                 if len(inoperativos) == 0:
-                    st.success("✅ **TODOS LOS SEGUROS OPERATIVOS.** \n\nPeso máximo normal permitido para esta posición según manual.")
+                    st.success("✅ **TODOS LOS SEGUROS OPERATIVOS.** \nPeso máximo normal permitido.")
                 else:
                     st.error("🚨 **ALERTA DE RESTRICCIÓN (MEL / W&B)**")
-                    
-                    # Lógica basada en combinaciones (Ejemplo)
                     if "FWD_IN" in inoperativos and "FWD_OUT" in inoperativos:
                         st.markdown("#### Restricción: 0 KG (NO LOAD)")
                         st.markdown("**Motivo:** Faltan TODOS los seguros frontales (FWD).")
-                        
                     elif len(inoperativos) == 1 and "FWD_IN" in inoperativos:
                         st.markdown("#### Restricción: 3,492 KG")
                         st.markdown("**Motivo:** Falla de 1 seguro frontal. Penalización aplicada.")
-                        
-                    elif "SIDE_FWD" in inoperativos or "SIDE_AFT" in inoperativos:
-                        st.markdown("#### Restricción: 2,100 KG")
-                        st.markdown("⚠️ **Atención:** Verifique que la posición adyacente no tenga fallas laterales también.")
-                        
                     else:
-                        st.markdown("#### Restricción: Calculando configuración especial...")
+                        st.markdown("#### Restricción: Calculando...")
                         st.markdown(f"Fallas detectadas: {', '.join(inoperativos)}")
 else:
     st.info("👈 Por favor, inicie sesión en el menú lateral izquierdo para utilizar la herramienta.")
