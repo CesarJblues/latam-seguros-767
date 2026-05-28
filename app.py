@@ -324,7 +324,7 @@ if st.session_state.autenticado:
                     
                     st.markdown("""
                     <div style='background-color:#00205B; border:2px solid #E12D39; border-radius:6px; height:110px; display:flex; align-items:center; justify-content:center; margin: 10px 0;'>
-                        <h4 style='color:white !important; margin:0;'>PALETA ULD</h4>
+                        <h4 style='color:red !important; margin:0;'>PALETA ULD</h4>
                     </div>
                     """, unsafe_allow_html=True)
 
