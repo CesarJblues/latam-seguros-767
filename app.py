@@ -8,7 +8,7 @@ import plotly.graph_objects as go
 st.set_page_config(page_title="LATAM - Seguros 767", page_icon="✈️", layout="wide")
 st.title("✈️ Calculadora Inteligente de Restricciones 767")
 
-RULES_FILE = "Locks_and_deferred.xlsx"
+RULES_FILE = "BASELocks_and_deferred.xlsx"
 
 # =============================================================================
 # 2. CARGA DE DATOS LOCALES
