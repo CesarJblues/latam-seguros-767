@@ -3,31 +3,19 @@ import pandas as pd
 import plotly.graph_objects as go
 
 # =============================================================================
-# 1. CONFIGURACIÓN INICIAL Y ESTILO CORPORATIVO LATAM
+# 1. CONFIGURACIÓN INICIAL Y ENTORNO VISUAL
 # =============================================================================
 st.set_page_config(page_title="LATAM Cargo - Restricciones 767", page_icon="✈️", layout="wide")
 
-# Inyección de CSS para pintar la interfaz con los colores de LATAM y arreglar el Modo Oscuro
+# Inyección de CSS exclusivo para el Banner y Tarjetas de Alerta Personalizadas
 st.markdown("""
     <style>
-        /* Fondo general de la app */
-        .stApp {
-            background-color: #F7F9FB;
-        }
-        /* Forzar color oscuro en los textos para evitar problemas con el Modo Oscuro */
-        div[data-testid="stToggle"] p, 
-        div[data-testid="stSelectbox"] label p,
-        div[data-testid="stSidebar"] p,
-        div[data-testid="stTextInput"] label p {
-            color: #00205B !important;
-            font-weight: 600;
-        }
-        /* Personalización de los títulos */
+        /* Títulos principales */
         h1, h2, h3, h4 {
-            color: #00205B !important;
             font-family: 'Arial Black', sans-serif;
+            color: #00205B !important;
         }
-        /* Barra superior decorativa estilo LATAM */
+        /* Banner superior estilo LATAM */
         .latam-banner {
             background-color: #00205B;
             padding: 15px;
@@ -40,19 +28,25 @@ st.markdown("""
             margin: 0;
             font-size: 24px;
         }
-        /* Estilo para tarjetas de alerta */
+        /* Estilo premium para tarjetas de restricción de peso */
         .report-card {
             background-color: white;
             padding: 15px;
             border-radius: 8px;
             border-left: 5px solid #00205B;
-            box-shadow: 0 2px 4px rgba(0,0,0,0.05);
-            margin-bottom: 10px;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.05);
+            margin-bottom: 12px;
+        }
+        .report-card b {
+            color: #00205B !important;
+        }
+        .report-card span {
+            color: #333333 !important;
         }
     </style>
 """, unsafe_allow_html=True)
 
-# Banner Corporativo Principal
+# Renderizado del Banner Corporativo
 st.markdown("""
     <div class="latam-banner">
         <h2>✈️ LATAM Cargo - Calculadora de Restricciones 767 (Main Deck)</h2>
@@ -62,7 +56,7 @@ st.markdown("""
 RULES_FILE = "BASELocks_and_deferred.xlsx"
 
 # =============================================================================
-# 2. CARGA DE DATOS LOCALES
+# 2. CARGA DE DATOS CENTRALIZADA
 # =============================================================================
 @st.cache_data
 def cargar_datos():
@@ -71,20 +65,20 @@ def cargar_datos():
         df_restricciones = pd.read_excel(RULES_FILE, sheet_name="ULD_Restrictions")
         df_mapa = pd.read_excel(RULES_FILE, sheet_name="Restraint_ULD_Map")
         
-        # Limpieza básica
+        # Limpieza de espacios en blanco en las cabeceras de columnas
         df_users.columns = [c.strip() for c in df_users.columns]
         df_restricciones.columns = [c.strip() for c in df_restricciones.columns]
         df_mapa.columns = [c.strip() for c in df_mapa.columns]
         
         return df_users, df_restricciones, df_mapa
     except Exception as e:
-        st.error(f"Error al leer el archivo Excel: {e}")
+        st.error(f"Error crítico al leer el archivo Excel: {e}")
         return None, None, None
 
 df_users, rules_df, map_df = cargar_datos()
 
 # =============================================================================
-# 3. LOGIN Y BARRA LATERAL (ESTILO LATAM)
+# 3. MÓDULO DE LOGIN Y HERRAMIENTAS DE CONTROL
 # =============================================================================
 st.sidebar.image("https://upload.wikimedia.org/wikipedia/commons/thumb/e/e0/LATAM_logo.svg/1024px-LATAM_logo.svg.png", width=150)
 st.sidebar.markdown("<br>", unsafe_allow_html=True)
@@ -105,22 +99,25 @@ if not st.session_state.autenticado:
                 st.session_state.usuario_actual = usuario_valido.iloc[0]['User_Name']
                 st.rerun()
             else:
-                st.sidebar.error("Acceso denegado. Usuario no autorizado.")
+                st.sidebar.error("Acceso denegado. Correo no registrado en el sistema.")
 else:
     st.sidebar.success(f"👤 {st.session_state.usuario_actual}")
     
+    # Herramienta interactiva para recargar el Excel en caliente
     if st.sidebar.button("🔄 Refrescar Excel (Limpiar Caché)"):
         st.cache_data.clear()
         st.rerun()
         
     if st.sidebar.button("Cerrar Sesión"):
         st.session_state.autenticado = False
+        st.session_state.pos_seleccionada = None
         st.rerun()
 
 # =============================================================================
-# 4. MAPA VISUAL CORPORATIVO (SIN LA POSICIÓN A1 - CREW REST)
+# 4. MAPA DEL AVIÓN (SIN POSICIÓN A1 - ZONA DE CREW REST MANTENIDA)
 # =============================================================================
 def dibujar_mapa(pos_seleccionada=None):
+    # Diccionario maestro de coordenadas (Posición A1 removida por operaciones)
     posiciones = {
         "A2L": {"x": [1], "y": [13]},  "A2R": {"x": [2], "y": [13]},
         "A3L": {"x": [1], "y": [12]},  "A3R": {"x": [2], "y": [12]},
@@ -138,7 +135,7 @@ def dibujar_mapa(pos_seleccionada=None):
 
     fig = go.Figure()
     
-    # 1. FORMA DEL FUSELAJE
+    # 1. Trazo del Fuselaje del Avión
     path_avion = "M 0.4, 1.5 L 0.4, 14.0 Q 1.5, 16.0 2.6, 14.0 L 2.6, 1.5 Q 1.5, -0.5 0.4, 1.5 Z"
     fig.add_shape(
         type="path", path=path_avion,
@@ -146,38 +143,36 @@ def dibujar_mapa(pos_seleccionada=None):
         fillcolor="#FFFFFF", layer="below"
     )
     
-    # 2. CABINA DE PILOTOS / CREW REST AREA
+    # 2. Zona de Cabina / Módulo Crew Rest
     fig.add_shape(
         type="path", path="M 0.9, 14.5 Q 1.5, 15.2 2.1, 14.5 L 1.8, 14.2 Q 1.5, 14.7 1.2, 14.2 Z",
-        line=dict(color="#00205B", width=1),
-        fillcolor="#00205B", layer="above"
+        line=dict(color="#00205B", width=1), fillcolor="#00205B", layer="above"
     )
     fig.add_annotation(
         x=1.5, y=14.8, text="CREW<br>REST", showarrow=False,
         font=dict(size=8, color="white", family="Arial Black")
     )
     
-    # 3. PUERTA DE CARGA PRINCIPAL
+    # 3. Indicador de Puerta de Carga Principal (Main Cargo Door)
     fig.add_shape(
         type="rect", x0=0.3, y0=12.5, x1=0.45, y1=13.8,
-        line=dict(color="#E12D39", width=2),
-        fillcolor="#E12D39", layer="above"
+        line=dict(color="#E12D39", width=2), fillcolor="#E12D39", layer="above"
     )
     fig.add_annotation(
         x=-0.2, y=13.1, text="CARGO<br>DOOR", showarrow=False, 
         font=dict(size=8, color="#E12D39", family="Arial Black")
     )
 
-    # 4. POSICIONES DE LAS PALETAS COMERCIALES
+    # 4. Renderizado dinámico de Paletas Comerciales
     for nombre, datos in posiciones.items():
         if pos_seleccionada == nombre:
-            color = "#E12D39" 
+            color = "#E12D39"  # Si está seleccionada, cambia a Rojo Coral LATAM
             line_color = "#00205B"
             line_width = 3
         else:
-            if "L" in nombre: color = "#00205B"      
-            elif "R" in nombre: color = "#5C768D"    
-            else: color = "#4A5568"                  
+            if "L" in nombre: color = "#00205B"      # Lado Izquierdo: Azul Índigo
+            elif "R" in nombre: color = "#5C768D"    # Lado Derecho: Azul Slate
+            else: color = "#4A5568"                  # Posición Trasera A17: Gris
             line_color = "white"
             line_width = 1.5
 
@@ -199,12 +194,13 @@ def dibujar_mapa(pos_seleccionada=None):
     return fig
 
 # =============================================================================
-# 5. MOTOR INTELIGENTE DE RESTRICCIONES
+# 5. MOTOR INTELIGENTE DE RESTRICCIONES (CRUCE E IMPEDIMENTO DE FILA 1)
 # =============================================================================
 def calcular_impacto(df_mapa, df_restricciones, avion_tipo, pos_vista, conteo_danos):
     resultados_finales = []
     model = "767-300BCF" if avion_tipo == "BCF" else "767-300F"
     
+    # Traducción de contextos para la base de datos
     if avion_tipo == "BCF":
         contexto_buscar = "BCF Side-by-Side" if "L" in pos_vista or "R" in pos_vista else "BCF Centerline"
         pos_mapa = pos_vista 
@@ -216,6 +212,7 @@ def calcular_impacto(df_mapa, df_restricciones, avion_tipo, pos_vista, conteo_da
     lados_rotos = [lado for lado, qty in conteo_danos.items() if qty > 0]
 
     for lado in lados_rotos:
+        # Validación 1: Regla Crítica del manual (2 seguros rotos en el mismo lado)
         if conteo_danos[lado] >= 2:
             resultados_finales.append({
                 "tipo": "alerta_critica", "posicion": pos_vista, "lado_perdido": lado, "kg": 0,
@@ -223,7 +220,7 @@ def calcular_impacto(df_mapa, df_restricciones, avion_tipo, pos_vista, conteo_da
             })
             continue 
 
-        # Impacto Directo
+        # Validación 2: Impacto Directo de Peso
         candidatos_peso_directo = df_restricciones[
             (df_restricciones["Model"] == model) & 
             ((df_restricciones["Pos"] == pos_vista) | (df_restricciones["Pos"] == pos_vista.replace("A", "")))
@@ -238,7 +235,7 @@ def calcular_impacto(df_mapa, df_restricciones, avion_tipo, pos_vista, conteo_da
                     "origen": "Daño directo reportado"
                 })
 
-        # Efecto Dominó (Seguros Compartidos)
+        # Validación 3: Cruce Inverso y Efecto Dominó (Seguros centrales/compartidos)
         seguro_buscado = df_mapa[
             (df_mapa["ULD_Pos_ID"] == pos_mapa) & 
             (df_mapa["Side_Affected"] == lado) &
@@ -255,6 +252,8 @@ def calcular_impacto(df_mapa, df_restricciones, avion_tipo, pos_vista, conteo_da
             
             for index, fila in afectados.iterrows():
                 pos_afectada_mapa = fila["ULD_Pos_ID"]
+                
+                # Bloqueo de seguridad: Evitar arrastrar restricciones a la fila 1 (Crew Rest)
                 if pos_afectada_mapa in ["A1", "1"]:
                     continue
                     
@@ -276,7 +275,7 @@ def calcular_impacto(df_mapa, df_restricciones, avion_tipo, pos_vista, conteo_da
                             "kg": float(fila_peso_comp[col_name_comp]), "origen": "Efecto dominó (Seguro central compartido)"
                         })
 
-    # Filtrar Duplicados
+    # Filtrar posibles duplicados en las consultas
     resultados_unicos = []
     vistos = set()
     for r in resultados_finales:
@@ -287,7 +286,7 @@ def calcular_impacto(df_mapa, df_restricciones, avion_tipo, pos_vista, conteo_da
     return resultados_unicos
 
 # =============================================================================
-# 6. INTERFAZ PRINCIPAL DE LA APP
+# 6. INTERFAZ OPERATIVA PRINCIPAL
 # =============================================================================
 if st.session_state.autenticado:
     col1, col2 = st.columns([1, 1.4])
@@ -318,7 +317,7 @@ if st.session_state.autenticado:
                 c_izq, c_centro, c_der = st.columns([1, 2, 1])
 
                 with c_centro:
-                    st.markdown("<div style='text-align:center;'><b style='color:#00205B;'>⬆️ FRENTE (FWD) ⬆️</b></div>", unsafe_allow_html=True)
+                    st.markdown("<div style='text-align:center;'><b>⬆️ FRENTE (FWD) ⬆️</b></div>", unsafe_allow_html=True)
                     f1, f2 = st.columns(2)
                     if f1.toggle("FWD Inboard"): danos_por_lado["FWD"] += 1
                     if f2.toggle("FWD Outboard"): danos_por_lado["FWD"] += 1
@@ -332,7 +331,7 @@ if st.session_state.autenticado:
                     a1, a2 = st.columns(2)
                     if a1.toggle("AFT Inboard"): danos_por_lado["AFT"] += 1
                     if a2.toggle("AFT Outboard"): danos_por_lado["AFT"] += 1
-                    st.markdown("<div style='text-align:center;'><b style='color:#00205B;'>⬇️ ATRÁS (AFT) ⬇️</b></div>", unsafe_allow_html=True)
+                    st.markdown("<div style='text-align:center;'><b>⬇️ ATRÁS (AFT) ⬇️</b></div>", unsafe_allow_html=True)
 
                 with c_izq:
                     st.write("<div style='height: 65px;'></div>", unsafe_allow_html=True)
@@ -356,22 +355,22 @@ if st.session_state.autenticado:
                         st.subheader("📋 Resumen de Restricciones Estructurales")
                         
                         if not alertas:
-                            st.error("⚠️ Alerta: No se encontró la combinación de pesos en 'ULD_Restrictions'.")
+                            st.error("⚠️ Alerta: No se encontró la combinación de pesos en la base de datos.")
                         
                         for r in alertas:
                             if r["tipo"] == "alerta_critica":
                                 st.markdown(f"""
                                     <div style='background-color:#FFEBEB; border-left:6px solid #E12D39; padding:15px; border-radius:6px; margin-bottom:10px;'>
                                         <b style='color:#E12D39; font-size:16px;'>🚫 NO LOAD (0 kg) en Posición {r['posicion']}</b><br>
-                                        <span style='color:#333;'><b>Motivo:</b> {r['origen']}</span>
+                                        <span style='color:#333333;'><b>Motivo:</b> {r['origen']}</span>
                                     </div>
                                 """, unsafe_allow_html=True)
                             else:
                                 st.markdown(f"""
                                     <div class="report-card">
-                                        <b style='color:#00205B; font-size:16px;'>📍 Restricción Aplicada: Posición {r['posicion']}</b><br>
-                                        <span style='color:#333;'><b>Condición:</b> Pierde seguro del lado {r['lado_perdido']} ({r['origen']})</span><br>
-                                        <span style='font-size:18px; color:#E12D39;'><b>Peso Máximo Permitido:</b> <code style='font-size:18px; color:#E12D39; background:none; padding:0;'>{r['kg']:.0f} kg</code></span>
+                                        <b>📍 Restricción Aplicada: Posición {r['posicion']}</b><br>
+                                        <span><b>Condición:</b> Pierde seguro del lado {r['lado_perdido']} ({r['origen']})</span><br>
+                                        <span style='font-size:18px; color:#E12D39;'><b>Peso Máximo Permitido:</b> <b>{r['kg']:.0f} kg</b></span>
                                     </div>
                                 """, unsafe_allow_html=True)
 else:
