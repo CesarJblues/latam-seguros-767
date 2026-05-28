@@ -7,12 +7,20 @@ import plotly.graph_objects as go
 # =============================================================================
 st.set_page_config(page_title="LATAM Cargo - Restricciones 767", page_icon="✈️", layout="wide")
 
-# Inyección de CSS para pintar la interfaz con los colores de LATAM
+# Inyección de CSS para pintar la interfaz con los colores de LATAM y arreglar el Modo Oscuro
 st.markdown("""
     <style>
         /* Fondo general de la app */
         .stApp {
             background-color: #F7F9FB;
+        }
+        /* Forzar color oscuro en los textos para evitar problemas con el Modo Oscuro */
+        div[data-testid="stToggle"] p, 
+        div[data-testid="stSelectbox"] label p,
+        div[data-testid="stSidebar"] p,
+        div[data-testid="stTextInput"] label p {
+            color: #00205B !important;
+            font-weight: 600;
         }
         /* Personalización de los títulos */
         h1, h2, h3, h4 {
@@ -51,7 +59,7 @@ st.markdown("""
     </div>
 """, unsafe_allow_html=True)
 
-RULES_FILE = "BASELocks_and_deferred.xlsx"
+RULES_FILE = "Locks_and_deferred.xlsx"
 
 # =============================================================================
 # 2. CARGA DE DATOS LOCALES
@@ -113,7 +121,6 @@ else:
 # 4. MAPA VISUAL CORPORATIVO (SIN LA POSICIÓN A1 - CREW REST)
 # =============================================================================
 def dibujar_mapa(pos_seleccionada=None):
-    # Removida por completo la posición A1 de la cabecera
     posiciones = {
         "A2L": {"x": [1], "y": [13]},  "A2R": {"x": [2], "y": [13]},
         "A3L": {"x": [1], "y": [12]},  "A3R": {"x": [2], "y": [12]},
@@ -131,11 +138,11 @@ def dibujar_mapa(pos_seleccionada=None):
 
     fig = go.Figure()
     
-    # 1. FORMA DEL FUSELAJE (Ajustada la punta del avión simulando el Crew Rest adelante)
+    # 1. FORMA DEL FUSELAJE
     path_avion = "M 0.4, 1.5 L 0.4, 14.0 Q 1.5, 16.0 2.6, 14.0 L 2.6, 1.5 Q 1.5, -0.5 0.4, 1.5 Z"
     fig.add_shape(
         type="path", path=path_avion,
-        line=dict(color="#00205B", width=3), # Contorno Azul LATAM
+        line=dict(color="#00205B", width=3),
         fillcolor="#FFFFFF", layer="below"
     )
     
@@ -153,7 +160,7 @@ def dibujar_mapa(pos_seleccionada=None):
     # 3. PUERTA DE CARGA PRINCIPAL
     fig.add_shape(
         type="rect", x0=0.3, y0=12.5, x1=0.45, y1=13.8,
-        line=dict(color="#E12D39", width=2), # Rojo Coral LATAM
+        line=dict(color="#E12D39", width=2),
         fillcolor="#E12D39", layer="above"
     )
     fig.add_annotation(
@@ -164,13 +171,13 @@ def dibujar_mapa(pos_seleccionada=None):
     # 4. POSICIONES DE LAS PALETAS COMERCIALES
     for nombre, datos in posiciones.items():
         if pos_seleccionada == nombre:
-            color = "#E12D39" # Seleccionada se pinta de Rojo Coral LATAM
+            color = "#E12D39" 
             line_color = "#00205B"
             line_width = 3
         else:
-            if "L" in nombre: color = "#00205B"      # Izquierdas: Índigo Corporativo
-            elif "R" in nombre: color = "#5C768D"    # Derechas: Azul Slate Secundario
-            else: color = "#4A5568"                  # Posición de Cola A17
+            if "L" in nombre: color = "#00205B"      
+            elif "R" in nombre: color = "#5C768D"    
+            else: color = "#4A5568"                  
             line_color = "white"
             line_width = 1.5
 
@@ -192,7 +199,7 @@ def dibujar_mapa(pos_seleccionada=None):
     return fig
 
 # =============================================================================
-# 5. MOTOR INTELIGENTE DE RESTRICCIONES (IGNORA A1 AUTOMÁTICAMENTE)
+# 5. MOTOR INTELIGENTE DE RESTRICCIONES
 # =============================================================================
 def calcular_impacto(df_mapa, df_restricciones, avion_tipo, pos_vista, conteo_danos):
     resultados_finales = []
@@ -248,7 +255,6 @@ def calcular_impacto(df_mapa, df_restricciones, avion_tipo, pos_vista, conteo_da
             
             for index, fila in afectados.iterrows():
                 pos_afectada_mapa = fila["ULD_Pos_ID"]
-                # Doble validación de seguridad corporativa: Ignorar si por error el mapa de seguros apunta a la fila 1
                 if pos_afectada_mapa in ["A1", "1"]:
                     continue
                     
@@ -312,7 +318,7 @@ if st.session_state.autenticado:
                 c_izq, c_centro, c_der = st.columns([1, 2, 1])
 
                 with c_centro:
-                    st.markdown("<div style='text-align:center;'><b>⬆️ FRENTE (FWD) ⬆️</b></div>", unsafe_allow_html=True)
+                    st.markdown("<div style='text-align:center;'><b style='color:#00205B;'>⬆️ FRENTE (FWD) ⬆️</b></div>", unsafe_allow_html=True)
                     f1, f2 = st.columns(2)
                     if f1.toggle("FWD Inboard"): danos_por_lado["FWD"] += 1
                     if f2.toggle("FWD Outboard"): danos_por_lado["FWD"] += 1
@@ -326,7 +332,7 @@ if st.session_state.autenticado:
                     a1, a2 = st.columns(2)
                     if a1.toggle("AFT Inboard"): danos_por_lado["AFT"] += 1
                     if a2.toggle("AFT Outboard"): danos_por_lado["AFT"] += 1
-                    st.markdown("<div style='text-align:center;'><b>⬇️ ATRÁS (AFT) ⬇️</b></div>", unsafe_allow_html=True)
+                    st.markdown("<div style='text-align:center;'><b style='color:#00205B;'>⬇️ ATRÁS (AFT) ⬇️</b></div>", unsafe_allow_html=True)
 
                 with c_izq:
                     st.write("<div style='height: 65px;'></div>", unsafe_allow_html=True)
@@ -338,7 +344,6 @@ if st.session_state.autenticado:
 
                 st.markdown("<br>", unsafe_allow_html=True)
                 
-                # Botón de ejecución estilo LATAM Coral
                 if st.button("🚨 ANALIZAR IMPACTO OPERATIVO", type="primary", use_container_width=True):
                     total_danos = sum(danos_por_lado.values())
                     
