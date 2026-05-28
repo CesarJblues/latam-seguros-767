@@ -322,9 +322,8 @@ if st.session_state.autenticado:
                     if f1.toggle("FWD Inboard"): danos_por_lado["FWD"] += 1
                     if f2.toggle("FWD Outboard"): danos_por_lado["FWD"] += 1
                     
-                    st.markdown("""
-                    <div style='background-color:#00205B; border:2px solid #E12D39; border-radius:6px; height:110px; display:flex; align-items:center; justify-content:center; margin: 10px 0;'>
-                        <h4 style='color:red !important; margin:0;'>PALETA ULD</h4>
+                    st.markdown("""<div style='background-color:#00205B; border:2px solid #E12D39; border-radius:6px; height:110px; display:flex; align-items:center; justify-content:center; margin: 10px 0;'>
+                    <span style='color: #FFFFFF !important; font-family: \"Arial Black\", sans-serif; font-size: 20px; font-weight: bold; margin:0;'>PALETA ULD</span>
                     </div>
                     """, unsafe_allow_html=True)
 
