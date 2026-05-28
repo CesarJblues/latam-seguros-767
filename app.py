@@ -59,7 +59,7 @@ st.markdown("""
     </div>
 """, unsafe_allow_html=True)
 
-RULES_FILE = "Locks_and_deferred.xlsx"
+RULES_FILE = "BASELocks_and_deferred.xlsx"
 
 # =============================================================================
 # 2. CARGA DE DATOS LOCALES
