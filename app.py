@@ -21,7 +21,7 @@ def cargar_datos():
         df_restricciones = pd.read_excel(RULES_FILE, sheet_name="ULD_Restrictions")
         df_mapa = pd.read_excel(RULES_FILE, sheet_name="Restraint_ULD_Map")
         
-        # Limpieza básica
+        # Limpieza básica de espacios en nombres de columnas
         df_users.columns = [c.strip() for c in df_users.columns]
         df_restricciones.columns = [c.strip() for c in df_restricciones.columns]
         df_mapa.columns = [c.strip() for c in df_mapa.columns]
@@ -62,7 +62,7 @@ else:
         st.rerun()
 
 # =============================================================================
-# 4. MAPA VISUAL COMPLETO (MAIN DECK 767 - 24 POSICIONES)
+# 4. MAPA VISUAL COMPLETO (MAIN DECK 767 - 24 POSICIONES MULTI-MANUALES)
 # =============================================================================
 def dibujar_mapa():
     posiciones = {
@@ -109,74 +109,110 @@ def dibujar_mapa():
     return fig
 
 # =============================================================================
-# 5. MOTOR INTELIGENTE DE RESTRICCIONES (BÚSQUEDA INVERSA)
+# 5. MOTOR COMPLETAMENTE BLINDADO DE RESTRICCIONES (FIJO)
 # =============================================================================
 def calcular_impacto(df_mapa, df_restricciones, avion_tipo, pos_vista, conteo_danos):
     resultados_finales = []
     
-    # Contexto BCF o Freighter
+    # Establecer el modelo de aeronave oficial
+    model = "767-300BCF" if avion_tipo == "BCF" else "767-300F"
+    
+    # Nombres de búsqueda para la pestaña del mapa de seguros
     if avion_tipo == "BCF":
-        model = "767-300BCF"
         contexto_buscar = "BCF Side-by-Side" if "L" in pos_vista or "R" in pos_vista else "BCF Centerline"
-        pos_real = pos_vista 
+        pos_mapa = pos_vista 
     else:
-        model = "767-300F"
         contexto_buscar = "F Side-by-Side" if "L" in pos_vista or "R" in pos_vista else "F Centerline"
-        pos_real = pos_vista.replace("A", "") 
+        pos_mapa = pos_vista.replace("A", "") # El mapa de seguros para F no usa la "A"
 
+    col_map = {"FWD": "FWD_kg", "AFT": "AFT_kg", "LEFT": "LEFT_kg", "RIGHT": "RIGHT_kg"}
     lados_rotos = [lado for lado, qty in conteo_danos.items() if qty > 0]
 
     for lado in lados_rotos:
-        # REGLA DEL MANUAL: Si hay 2 o más seguros dañados en el MISMO LADO (Adyacentes) -> 0 KG
+        # 1. REGLA CRÍTICA DEL MANUAL: Si hay 2 o más seguros dañados en el MISMO LADO (Adyacentes) -> 0 KG
         if conteo_danos[lado] >= 2:
             resultados_finales.append({
                 "tipo": "alerta_critica",
-                "posicion": pos_real,
+                "posicion": pos_vista,
                 "lado_perdido": lado,
                 "kg": 0,
-                "origen": f"Múltiples seguros dañados en el lado {lado} (Regla de Adyacencia WBM)"
+                "origen": f"Múltiples seguros dañados en el lado {lado} (Regla de Adyacencia del Manual)"
             })
-            continue # Como ya dio 0, saltamos a la siguiente regla
+            continue 
+
+        # 2. IMPACTO DIRECTO (Buscar directamente en la tabla de pesos usando búsqueda flexible con/sin 'A')
+        candidatos_peso_directo = df_restricciones[
+            (df_restricciones["Model"] == model) & 
+            ((df_restricciones["Pos"] == pos_vista) | (df_restricciones["Pos"] == pos_vista.replace("A", "")))
+        ]
+        
+        if not candidatos_peso_directo.empty:
+            fila_peso = candidatos_peso_directo.iloc[0]
+            col_name = col_map.get(lado)
             
-        # Si es solo 1 seguro roto por lado, hacemos BÚSQUEDA INVERSA en tu mapa
+            if col_name and col_name in fila_peso and pd.notna(fila_peso[col_name]):
+                resultados_finales.append({
+                    "tipo": "alerta",
+                    "posicion": pos_vista,
+                    "lado_perdido": lado,
+                    "kg": float(fila_peso[col_name]),
+                    "origen": "Daño directo en esta posición"
+                })
+
+        # 3. IMPACTO COMPARTIDO / EFECTO DOMINÓ (Ver si este seguro afecta a otra posición vecina)
         seguro_buscado = df_mapa[
-            (df_mapa["ULD_Pos_ID"] == pos_real) & 
+            (df_mapa["ULD_Pos_ID"] == pos_mapa) & 
             (df_mapa["Side_Affected"] == lado) &
             (df_mapa["Config_Context"].str.contains(contexto_buscar, na=False))
         ]
         
-        if seguro_buscado.empty:
-            continue
-
-        seguro_fisico_id = seguro_buscado.iloc[0]["Restraint_Fisico_ID"]
-        
-        # EFECTO DOMINÓ: Posiciones que comparten este seguro
-        afectados = df_mapa[
-            (df_mapa["Restraint_Fisico_ID"] == seguro_fisico_id) &
-            (df_mapa["Config_Context"].str.contains(contexto_buscar, na=False))
-        ]
-        
-        for index, fila in afectados.iterrows():
-            pos_afectada = fila["ULD_Pos_ID"]
-            lado_afectado = fila["Side_Affected"]
+        if not seguro_buscado.empty:
+            seguro_fisico_id = seguro_buscado.iloc[0]["Restraint_Fisico_ID"]
             
-            candidatos_peso = df_restricciones[(df_restricciones["Model"] == model) & (df_restricciones["Pos"] == pos_afectada)]
+            # Buscamos qué OTRAS posiciones comparten este ID físico de seguro
+            afectados = df_mapa[
+                (df_mapa["Restraint_Fisico_ID"] == seguro_fisico_id) &
+                (df_mapa["Config_Context"].str.contains(contexto_buscar, na=False)) &
+                (df_mapa["ULD_Pos_ID"] != pos_mapa) # Excluimos la actual
+            ]
             
-            if not candidatos_peso.empty:
-                fila_peso = candidatos_peso.iloc[0]
-                col_map = {"FWD": "FWD_kg", "AFT": "AFT_kg", "LEFT": "LEFT_kg", "RIGHT": "RIGHT_kg"}
-                col_name = col_map.get(lado_afectado)
+            for index, fila in afectados.iterrows():
+                pos_afectada_mapa = fila["ULD_Pos_ID"]
+                lado_afectado_mapa = fila["Side_Affected"]
                 
-                if col_name and pd.notna(fila_peso[col_name]):
-                    resultados_finales.append({
-                        "tipo": "alerta",
-                        "posicion": pos_afectada,
-                        "lado_perdido": lado_afectado,
-                        "kg": float(fila_peso[col_name]),
-                        "origen": f"Daño reportado en {pos_real} ({lado})"
-                    })
+                # Devolver el formato visual con "A" si es necesario para mantener consistencia en la pantalla
+                pos_afectada_pantalla = pos_afectada_mapa if pos_afectada_mapa.startswith("A") else f"A{pos_afectada_mapa}"
+                if pos_afectada_pantalla == "A17": pos_afectada_pantalla = "A17" # Ajuste para la cola
+                
+                # Buscar el peso de la posición vecina afectada
+                candidatos_peso_compartido = df_restricciones[
+                    (df_restricciones["Model"] == model) & 
+                    ((df_restricciones["Pos"] == pos_afectada_mapa) | (df_restricciones["Pos"] == pos_afectada_pantalla))
+                ]
+                
+                if not candidatos_peso_compartido.empty:
+                    fila_peso_comp = candidatos_peso_compartido.iloc[0]
+                    col_name_comp = col_map.get(lado_afectado_mapa)
+                    
+                    if col_name_comp and col_name_comp in fila_peso_comp and pd.notna(fila_peso_comp[col_name_comp]):
+                        resultados_finales.append({
+                            "tipo": "alerta",
+                            "posicion": pos_afectada_pantalla,
+                            "lado_perdido": lado_afectado_mapa,
+                            "kg": float(fila_peso_comp[col_name_comp]),
+                            "origen": f"Efecto dominó (Seguro compartido '{seguro_fisico_id}')"
+                        })
 
-    return resultados_finales
+    # Eliminar posibles duplicados idénticos en la lista de resultados
+    resultados_unicos = []
+    vistos = set()
+    for r in resultados_finales:
+        clave = (r["posicion"], r["lado_perdido"], r["kg"], r["tipo"])
+        if clave not in vistos:
+            vistos.add(clave)
+            resultados_unicos.append(r)
+
+    return resultados_unicos
 
 # =============================================================================
 # 6. INTERFAZ PRINCIPAL DE LA APP
@@ -206,9 +242,7 @@ if st.session_state.autenticado:
                 st.markdown("### 🔍 Radiografía de la Paleta")
                 st.info("**PASO 3:** Selecciona los seguros que ves inoperativos:")
 
-                # Diccionario para contar cuántos seguros se dañan por lado (Para la regla 0 KG)
                 danos_por_lado = {"FWD": 0, "AFT": 0, "LEFT": 0, "RIGHT": 0}
-                
                 c_izq, c_centro, c_der = st.columns([1, 2, 1])
 
                 with c_centro:
@@ -248,16 +282,17 @@ if st.session_state.autenticado:
                         alertas = calcular_impacto(map_df, rules_df, avion, pos_seleccionada, danos_por_lado)
                         
                         st.markdown("---")
-                        st.subheader("📋 Resumen de Restricciones (Efecto Dominó)")
+                        st.subheader("📋 Resumen de Restricciones Generadas")
                         
                         if not alertas:
-                            st.warning("⚠️ No se encontró restricción para esta configuración en la base de datos.")
+                            st.error("⚠️ Error: No se encontró la combinación de pesos en la pestaña 'ULD_Restrictions'. Revisa que la fila exista en tu Excel.")
                         
                         for alerta in alertas:
                             if alerta["tipo"] == "alerta_critica":
-                                st.error(f"🚫 **NO LOAD (0 KG) en Posición {alerta['posicion']}**")
+                                st.error(f"🚫 **NO LOAD (0 kg) en Posición {alerta['posicion']}**")
                                 st.markdown(f"> **Motivo:** {alerta['origen']}")
                             elif alerta["tipo"] == "alerta":
-                                st.warning(f"📍 **Penalización en Posición {alerta['posicion']}**")
-                                st.markdown(f"> Pierde seguro **{alerta['lado_perdido']}** por {alerta['origen']}.")
-                                st.markdown(f"> **Peso Máximo Permitido:** `{alerta['kg']} kg`")
+                                st.warning(f"📍 **Restricción en Posición {alerta['posicion']}**")
+                                st.markdown(f"> **Condición:** Pierde seguro del lado **{alerta['lado_perdido']}** ({alerta['origen']}).")
+                                # Forzar el formato entero y la palabra kg obligatoria
+                                st.markdown(f"> **Peso Máximo Permitido:** `{alerta['kg']:.0f} kg`")
