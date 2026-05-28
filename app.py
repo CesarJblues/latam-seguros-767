@@ -3,12 +3,55 @@ import pandas as pd
 import plotly.graph_objects as go
 
 # =============================================================================
-# 1. CONFIGURACIÓN INICIAL
+# 1. CONFIGURACIÓN INICIAL Y ESTILO CORPORATIVO LATAM
 # =============================================================================
-st.set_page_config(page_title="LATAM - Seguros 767", page_icon="✈️", layout="wide")
-st.title("✈️ Calculadora Inteligente de Restricciones 767")
+st.set_page_config(page_title="LATAM Cargo - Restricciones 767", page_icon="✈️", layout="wide")
 
-RULES_FILE = "Locks_and_deferred.xlsx"
+# Inyección de CSS para pintar la interfaz con los colores de LATAM
+st.markdown("""
+    <style>
+        /* Fondo general de la app */
+        .stApp {
+            background-color: #F7F9FB;
+        }
+        /* Personalización de los títulos */
+        h1, h2, h3, h4 {
+            color: #00205B !important;
+            font-family: 'Arial Black', sans-serif;
+        }
+        /* Barra superior decorativa estilo LATAM */
+        .latam-banner {
+            background-color: #00205B;
+            padding: 15px;
+            border-radius: 8px;
+            margin-bottom: 25px;
+            border-left: 6px solid #E12D39;
+        }
+        .latam-banner h2 {
+            color: white !important;
+            margin: 0;
+            font-size: 24px;
+        }
+        /* Estilo para tarjetas de alerta */
+        .report-card {
+            background-color: white;
+            padding: 15px;
+            border-radius: 8px;
+            border-left: 5px solid #00205B;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+            margin-bottom: 10px;
+        }
+    </style>
+""", unsafe_allow_html=True)
+
+# Banner Corporativo Principal
+st.markdown("""
+    <div class="latam-banner">
+        <h2>✈️ LATAM Cargo - Calculadora de Restricciones 767 (Main Deck)</h2>
+    </div>
+""", unsafe_allow_html=True)
+
+RULES_FILE = "BASELocks_and_deferred.xlsx"
 
 # =============================================================================
 # 2. CARGA DE DATOS LOCALES
@@ -16,12 +59,11 @@ RULES_FILE = "Locks_and_deferred.xlsx"
 @st.cache_data
 def cargar_datos():
     try:
-        # Cargamos las 3 pestañas clave
         df_users = pd.read_excel(RULES_FILE, sheet_name="Users")
         df_restricciones = pd.read_excel(RULES_FILE, sheet_name="ULD_Restrictions")
         df_mapa = pd.read_excel(RULES_FILE, sheet_name="Restraint_ULD_Map")
         
-        # Limpieza básica de nombres de columnas
+        # Limpieza básica
         df_users.columns = [c.strip() for c in df_users.columns]
         df_restricciones.columns = [c.strip() for c in df_restricciones.columns]
         df_mapa.columns = [c.strip() for c in df_mapa.columns]
@@ -34,16 +76,17 @@ def cargar_datos():
 df_users, rules_df, map_df = cargar_datos()
 
 # =============================================================================
-# 3. LOGIN Y BARRA LATERAL
+# 3. LOGIN Y BARRA LATERAL (ESTILO LATAM)
 # =============================================================================
 st.sidebar.image("https://upload.wikimedia.org/wikipedia/commons/thumb/e/e0/LATAM_logo.svg/1024px-LATAM_logo.svg.png", width=150)
+st.sidebar.markdown("<br>", unsafe_allow_html=True)
 st.sidebar.header("🔐 Acceso Corporativo")
 
 if "autenticado" not in st.session_state:
     st.session_state.autenticado = False
 
 if not st.session_state.autenticado:
-    correo = st.sidebar.text_input("Correo Institucional (Ej: nombre@latam.com):")
+    correo = st.sidebar.text_input("Correo Institucional:")
     btn_login = st.sidebar.button("Iniciar Sesión")
 
     if btn_login:
@@ -54,11 +97,10 @@ if not st.session_state.autenticado:
                 st.session_state.usuario_actual = usuario_valido.iloc[0]['User_Name']
                 st.rerun()
             else:
-                st.sidebar.error("Acceso denegado. Correo no registrado.")
+                st.sidebar.error("Acceso denegado. Usuario no autorizado.")
 else:
-    st.sidebar.success(f"Hola, {st.session_state.usuario_actual}")
+    st.sidebar.success(f"👤 {st.session_state.usuario_actual}")
     
-    # Botón útil para cuando actualices el Excel sin tener que apagar la terminal
     if st.sidebar.button("🔄 Refrescar Excel (Limpiar Caché)"):
         st.cache_data.clear()
         st.rerun()
@@ -68,11 +110,11 @@ else:
         st.rerun()
 
 # =============================================================================
-# 4. MAPA VISUAL CREATIVO (MAIN DECK 767 - 24 POSICIONES)
+# 4. MAPA VISUAL CORPORATIVO (SIN LA POSICIÓN A1 - CREW REST)
 # =============================================================================
 def dibujar_mapa(pos_seleccionada=None):
+    # Removida por completo la posición A1 de la cabecera
     posiciones = {
-        "A1":  {"x": [1.5], "y": [14]},
         "A2L": {"x": [1], "y": [13]},  "A2R": {"x": [2], "y": [13]},
         "A3L": {"x": [1], "y": [12]},  "A3R": {"x": [2], "y": [12]},
         "A4L": {"x": [1], "y": [11]},  "A4R": {"x": [2], "y": [11]},
@@ -89,74 +131,71 @@ def dibujar_mapa(pos_seleccionada=None):
 
     fig = go.Figure()
     
-    # 1. FORMA DEL FUSELAJE (Nariz curva y cola)
-    path_avion = "M 0.4, 1.5 L 0.4, 14.5 Q 1.5, 16.5 2.6, 14.5 L 2.6, 1.5 Q 1.5, -0.5 0.4, 1.5 Z"
+    # 1. FORMA DEL FUSELAJE (Ajustada la punta del avión simulando el Crew Rest adelante)
+    path_avion = "M 0.4, 1.5 L 0.4, 14.0 Q 1.5, 16.0 2.6, 14.0 L 2.6, 1.5 Q 1.5, -0.5 0.4, 1.5 Z"
     fig.add_shape(
         type="path", path=path_avion,
-        line=dict(color="#9fb3c8", width=3),
-        fillcolor="#f0f4f8", layer="below"
+        line=dict(color="#00205B", width=3), # Contorno Azul LATAM
+        fillcolor="#FFFFFF", layer="below"
     )
     
-    # 2. CABINA DE PILOTOS (Cockpit Windows)
+    # 2. CABINA DE PILOTOS / CREW REST AREA
     fig.add_shape(
-        type="path", path="M 0.9, 14.9 Q 1.5, 15.6 2.1, 14.9 L 1.8, 14.6 Q 1.5, 15.1 1.2, 14.6 Z",
-        line=dict(color="#334e68", width=1),
-        fillcolor="#486581", layer="above"
-    )
-    
-    # 3. PUERTA DE CARGA PRINCIPAL (Main Deck Cargo Door)
-    fig.add_shape(
-        type="rect", x0=0.3, y0=13.2, x1=0.45, y1=14.4,
-        line=dict(color="#e12d39", width=2),
-        fillcolor="white", layer="above"
+        type="path", path="M 0.9, 14.5 Q 1.5, 15.2 2.1, 14.5 L 1.8, 14.2 Q 1.5, 14.7 1.2, 14.2 Z",
+        line=dict(color="#00205B", width=1),
+        fillcolor="#00205B", layer="above"
     )
     fig.add_annotation(
-        x=-0.1, y=13.8, text="CARGO<br>DOOR", showarrow=False, 
-        font=dict(size=9, color="#e12d39", family="Arial Black")
+        x=1.5, y=14.8, text="CREW<br>REST", showarrow=False,
+        font=dict(size=8, color="white", family="Arial Black")
+    )
+    
+    # 3. PUERTA DE CARGA PRINCIPAL
+    fig.add_shape(
+        type="rect", x0=0.3, y0=12.5, x1=0.45, y1=13.8,
+        line=dict(color="#E12D39", width=2), # Rojo Coral LATAM
+        fillcolor="#E12D39", layer="above"
+    )
+    fig.add_annotation(
+        x=-0.2, y=13.1, text="CARGO<br>DOOR", showarrow=False, 
+        font=dict(size=8, color="#E12D39", family="Arial Black")
     )
 
-    # 4. POSICIONES DE LAS PALETAS
+    # 4. POSICIONES DE LAS PALETAS COMERCIALES
     for nombre, datos in posiciones.items():
-        # Lógica de color interactiva: Destacar si la posición está seleccionada
         if pos_seleccionada == nombre:
-            color = "#e12d39" # Rojo corporativo si está clickeada
-            line_color = "black"
+            color = "#E12D39" # Seleccionada se pinta de Rojo Coral LATAM
+            line_color = "#00205B"
             line_width = 3
         else:
-            if "L" in nombre: color = "#102a43"
-            elif "R" in nombre: color = "#829ab1"
-            else: color = "#003b70"
+            if "L" in nombre: color = "#00205B"      # Izquierdas: Índigo Corporativo
+            elif "R" in nombre: color = "#5C768D"    # Derechas: Azul Slate Secundario
+            else: color = "#4A5568"                  # Posición de Cola A17
             line_color = "white"
             line_width = 1.5
 
         fig.add_trace(go.Scatter(
             x=datos["x"], y=datos["y"], mode="markers+text",
-            marker=dict(
-                size=42, symbol="square", color=color, 
-                line=dict(width=line_width, color=line_color), opacity=0.95
-            ),
+            marker=dict(size=42, symbol="square", color=color, line=dict(width=line_width, color=line_color)),
             text=[nombre], textposition="middle center",
             textfont=dict(color="white", size=10, family="Arial Black"),
             customdata=[nombre], hoverinfo="none"
         ))
 
     fig.update_layout(
-        title=dict(text="✈️ Plano Interactivo 767", font=dict(size=18, color="#102a43"), x=0.5),
-        xaxis=dict(showgrid=False, range=[-0.5, 3.5], visible=False),
-        yaxis=dict(showgrid=False, range=[0, 16.5], visible=False),
-        width=400, height=850, plot_bgcolor="white", showlegend=False,
-        margin=dict(l=0, r=0, t=50, b=10), clickmode="event+select",
-        dragmode=False # Evita paneos por error en tablets
+        xaxis=dict(showgrid=False, range=[-0.6, 3.6], visible=False),
+        yaxis=dict(showgrid=False, range=[0, 16.0], visible=False),
+        width=380, height=800, plot_bgcolor="rgba(0,0,0,0)", showlegend=False,
+        margin=dict(l=0, r=0, t=10, b=10), clickmode="event+select", dragmode=False
     )
 
     return fig
 
 # =============================================================================
-# 5. MOTOR COMPLETAMENTE BLINDADO DE RESTRICCIONES (EFECTO DOMINÓ)
+# 5. MOTOR INTELIGENTE DE RESTRICCIONES (IGNORA A1 AUTOMÁTICAMENTE)
 # =============================================================================
 def calcular_impacto(df_mapa, df_restricciones, avion_tipo, pos_vista, conteo_danos):
     resultados_finales = []
-    
     model = "767-300BCF" if avion_tipo == "BCF" else "767-300F"
     
     if avion_tipo == "BCF":
@@ -170,18 +209,14 @@ def calcular_impacto(df_mapa, df_restricciones, avion_tipo, pos_vista, conteo_da
     lados_rotos = [lado for lado, qty in conteo_danos.items() if qty > 0]
 
     for lado in lados_rotos:
-        # 1. REGLA CRÍTICA: Múltiples seguros en el mismo lado (Adyacentes) -> 0 KG
         if conteo_danos[lado] >= 2:
             resultados_finales.append({
-                "tipo": "alerta_critica",
-                "posicion": pos_vista,
-                "lado_perdido": lado,
-                "kg": 0,
+                "tipo": "alerta_critica", "posicion": pos_vista, "lado_perdido": lado, "kg": 0,
                 "origen": f"Múltiples seguros dañados en el lado {lado} (Regla de Adyacencia)"
             })
             continue 
 
-        # 2. IMPACTO DIRECTO (Buscar en tabla de pesos general)
+        # Impacto Directo
         candidatos_peso_directo = df_restricciones[
             (df_restricciones["Model"] == model) & 
             ((df_restricciones["Pos"] == pos_vista) | (df_restricciones["Pos"] == pos_vista.replace("A", "")))
@@ -190,17 +225,13 @@ def calcular_impacto(df_mapa, df_restricciones, avion_tipo, pos_vista, conteo_da
         if not candidatos_peso_directo.empty:
             fila_peso = candidatos_peso_directo.iloc[0]
             col_name = col_map.get(lado)
-            
             if col_name and col_name in fila_peso and pd.notna(fila_peso[col_name]):
                 resultados_finales.append({
-                    "tipo": "alerta",
-                    "posicion": pos_vista,
-                    "lado_perdido": lado,
-                    "kg": float(fila_peso[col_name]),
+                    "tipo": "alerta", "posicion": pos_vista, "lado_perdido": lado, "kg": float(fila_peso[col_name]),
                     "origen": "Daño directo reportado"
                 })
 
-        # 3. IMPACTO COMPARTIDO (EFECTO DOMINÓ - Buscar en mapa de seguros)
+        # Efecto Dominó (Seguros Compartidos)
         seguro_buscado = df_mapa[
             (df_mapa["ULD_Pos_ID"] == pos_mapa) & 
             (df_mapa["Side_Affected"] == lado) &
@@ -209,7 +240,6 @@ def calcular_impacto(df_mapa, df_restricciones, avion_tipo, pos_vista, conteo_da
         
         if not seguro_buscado.empty:
             seguro_fisico_id = seguro_buscado.iloc[0]["Restraint_Fisico_ID"]
-            
             afectados = df_mapa[
                 (df_mapa["Restraint_Fisico_ID"] == seguro_fisico_id) &
                 (df_mapa["Config_Context"].str.contains(contexto_buscar, na=False)) &
@@ -218,8 +248,11 @@ def calcular_impacto(df_mapa, df_restricciones, avion_tipo, pos_vista, conteo_da
             
             for index, fila in afectados.iterrows():
                 pos_afectada_mapa = fila["ULD_Pos_ID"]
+                # Doble validación de seguridad corporativa: Ignorar si por error el mapa de seguros apunta a la fila 1
+                if pos_afectada_mapa in ["A1", "1"]:
+                    continue
+                    
                 lado_afectado_mapa = fila["Side_Affected"]
-                
                 pos_afectada_pantalla = pos_afectada_mapa if pos_afectada_mapa.startswith("A") else f"A{pos_afectada_mapa}"
                 if pos_afectada_pantalla == "A17": pos_afectada_pantalla = "A17"
                 
@@ -231,17 +264,13 @@ def calcular_impacto(df_mapa, df_restricciones, avion_tipo, pos_vista, conteo_da
                 if not candidatos_peso_compartido.empty:
                     fila_peso_comp = candidatos_peso_compartido.iloc[0]
                     col_name_comp = col_map.get(lado_afectado_mapa)
-                    
                     if col_name_comp and col_name_comp in fila_peso_comp and pd.notna(fila_peso_comp[col_name_comp]):
                         resultados_finales.append({
-                            "tipo": "alerta",
-                            "posicion": pos_afectada_pantalla,
-                            "lado_perdido": lado_afectado_mapa,
-                            "kg": float(fila_peso_comp[col_name_comp]),
-                            "origen": f"Efecto dominó (Seguro central compartido)"
+                            "tipo": "alerta", "posicion": pos_afectada_pantalla, "lado_perdido": lado_afectado_mapa,
+                            "kg": float(fila_peso_comp[col_name_comp]), "origen": "Efecto dominó (Seguro central compartido)"
                         })
 
-    # Eliminar posibles alertas duplicadas visualmente
+    # Filtrar Duplicados
     resultados_unicos = []
     vistos = set()
     for r in resultados_finales:
@@ -249,41 +278,35 @@ def calcular_impacto(df_mapa, df_restricciones, avion_tipo, pos_vista, conteo_da
         if clave not in vistos:
             vistos.add(clave)
             resultados_unicos.append(r)
-
     return resultados_unicos
 
 # =============================================================================
 # 6. INTERFAZ PRINCIPAL DE LA APP
 # =============================================================================
 if st.session_state.autenticado:
-    st.write("---")
-    col1, col2 = st.columns([1, 1.5])
+    col1, col2 = st.columns([1, 1.4])
 
-    # Variable de sesión para guardar la posición clickeada visualmente
     if "pos_seleccionada" not in st.session_state:
         st.session_state.pos_seleccionada = None
 
     with col1:
-        st.info("👇 **PASO 1:** Haz clic en una posición del mapa.")
-        # Dibujamos el mapa mandando la posición clickeada (para el color rojo)
+        st.info("👇 **PASO 1:** Selecciona la posición en el plano del avión.")
         event = st.plotly_chart(dibujar_mapa(st.session_state.pos_seleccionada), use_container_width=True, on_select="rerun")
         
         if event and "selection" in event and event["selection"]["points"]:
             st.session_state.pos_seleccionada = event["selection"]["points"][0]["customdata"]
-            st.rerun() # Recargamos suavemente para que se pinte el botón
+            st.rerun()
 
     with col2:
-        st.subheader("Configuración de Falla")
-        avion = st.selectbox("**PASO 2:** Tipo de Aeronave:", ["Seleccionar...", "Freighter", "BCF"])
+        st.subheader("🛠️ Configuración de Falla en Rampa")
+        avion = st.selectbox("**PASO 2:** Modelo de Aeronave:", ["Seleccionar...", "Freighter", "BCF"])
 
         if avion != "Seleccionar...":
             if not st.session_state.pos_seleccionada:
-                st.warning("👈 Selecciona una posición del mapa de la izquierda.")
+                st.warning("👈 Selecciona una posición activa del mapa de la izquierda.")
             else:
-                st.success(f"📍 Posición seleccionada: **{st.session_state.pos_seleccionada}**")
-
-                st.markdown("### 🔍 Radiografía de la Paleta")
-                st.info("**PASO 3:** Selecciona los seguros que ves inoperativos:")
+                st.markdown(f"Análisis Activo: <b style='color:#E12D39; font-size:18px;'>Posición {st.session_state.pos_seleccionada}</b>", unsafe_allow_html=True)
+                st.info("**PASO 3:** Selecciona los seguros físicamente inoperativos:")
 
                 danos_por_lado = {"FWD": 0, "AFT": 0, "LEFT": 0, "RIGHT": 0}
                 c_izq, c_centro, c_der = st.columns([1, 2, 1])
@@ -295,8 +318,8 @@ if st.session_state.autenticado:
                     if f2.toggle("FWD Outboard"): danos_por_lado["FWD"] += 1
                     
                     st.markdown("""
-                    <div style='background-color:#d9e2ec; border:3px dashed #627d98; border-radius:10px; height:120px; display:flex; align-items:center; justify-content:center; flex-direction:column; margin: 10px 0;'>
-                        <h3 style='color:#102a43; margin:0;'>📦 PALETA</h3>
+                    <div style='background-color:#00205B; border:2px solid #E12D39; border-radius:6px; height:110px; display:flex; align-items:center; justify-content:center; margin: 10px 0;'>
+                        <h4 style='color:white !important; margin:0;'>PALETA ULD</h4>
                     </div>
                     """, unsafe_allow_html=True)
 
@@ -306,35 +329,45 @@ if st.session_state.autenticado:
                     st.markdown("<div style='text-align:center;'><b>⬇️ ATRÁS (AFT) ⬇️</b></div>", unsafe_allow_html=True)
 
                 with c_izq:
-                    st.write("<div style='height: 70px;'></div>", unsafe_allow_html=True)
+                    st.write("<div style='height: 65px;'></div>", unsafe_allow_html=True)
                     if st.toggle("Lateral LEFT"): danos_por_lado["LEFT"] += 1
                 
                 with c_der:
-                    st.write("<div style='height: 70px;'></div>", unsafe_allow_html=True)
+                    st.write("<div style='height: 65px;'></div>", unsafe_allow_html=True)
                     if st.toggle("Lateral RIGHT"): danos_por_lado["RIGHT"] += 1
 
-                # =================================================================
-                # BOTÓN DE ANÁLISIS
-                # =================================================================
-                if st.button("🚨 Analizar Impacto de Daños", type="primary"):
+                st.markdown("<br>", unsafe_allow_html=True)
+                
+                # Botón de ejecución estilo LATAM Coral
+                if st.button("🚨 ANALIZAR IMPACTO OPERATIVO", type="primary", use_container_width=True):
                     total_danos = sum(danos_por_lado.values())
                     
                     if total_danos == 0:
-                        st.success("✅ No hay seguros inoperativos. Posición OK para cargar.")
+                        st.success("✅ TODOS LOS SEGUROS OPERATIVOS. Posición autorizada para carga normal.")
                     else:
                         alertas = calcular_impacto(map_df, rules_df, avion, st.session_state.pos_seleccionada, danos_por_lado)
                         
                         st.markdown("---")
-                        st.subheader("📋 Resumen de Restricciones Generadas")
+                        st.subheader("📋 Resumen de Restricciones Estructurales")
                         
                         if not alertas:
-                            st.error("⚠️ Error: No se encontró la combinación en la base de datos (pestaña ULD_Restrictions).")
+                            st.error("⚠️ Alerta: No se encontró la combinación de pesos en 'ULD_Restrictions'.")
                         
-                        for alerta in alertas:
-                            if alerta["tipo"] == "alerta_critica":
-                                st.error(f"🚫 **NO LOAD (0 kg) en Posición {alerta['posicion']}**")
-                                st.markdown(f"> **Motivo:** {alerta['origen']}")
-                            elif alerta["tipo"] == "alerta":
-                                st.warning(f"📍 **Restricción en Posición {alerta['posicion']}**")
-                                st.markdown(f"> **Condición:** Pierde seguro del lado **{alerta['lado_perdido']}** ({alerta['origen']}).")
-                                st.markdown(f"> **Peso Máximo Permitido:** `{alerta['kg']:.0f} kg`")
+                        for r in alertas:
+                            if r["tipo"] == "alerta_critica":
+                                st.markdown(f"""
+                                    <div style='background-color:#FFEBEB; border-left:6px solid #E12D39; padding:15px; border-radius:6px; margin-bottom:10px;'>
+                                        <b style='color:#E12D39; font-size:16px;'>🚫 NO LOAD (0 kg) en Posición {r['posicion']}</b><br>
+                                        <span style='color:#333;'><b>Motivo:</b> {r['origen']}</span>
+                                    </div>
+                                """, unsafe_allow_html=True)
+                            else:
+                                st.markdown(f"""
+                                    <div class="report-card">
+                                        <b style='color:#00205B; font-size:16px;'>📍 Restricción Aplicada: Posición {r['posicion']}</b><br>
+                                        <span style='color:#333;'><b>Condición:</b> Pierde seguro del lado {r['lado_perdido']} ({r['origen']})</span><br>
+                                        <span style='font-size:18px; color:#E12D39;'><b>Peso Máximo Permitido:</b> <code style='font-size:18px; color:#E12D39; background:none; padding:0;'>{r['kg']:.0f} kg</code></span>
+                                    </div>
+                                """, unsafe_allow_html=True)
+else:
+    st.info("👈 Por favor, ingrese con su correo institucional en el panel de la izquierda para habilitar la aplicación.")
