@@ -3,7 +3,7 @@ import pandas as pd
 import plotly.graph_objects as go
 
 # =============================================================================
-# 1. CONFIGURACIÓN INICIAL Y ENTORNO VISUAL
+# 1. CONFIGURACIÓN INICIAL Y ESTILO CORPORATIVO
 # =============================================================================
 st.set_page_config(page_title="LATAM Cargo - Restricciones 767", page_icon="✈️", layout="wide")
 
@@ -15,7 +15,7 @@ st.markdown("""
             font-family: 'Arial Black', sans-serif;
             color: #00205B !important;
         }
-        /* Banner superior estilo LATAM */
+        /* Barra superior estilo LATAM */
         .latam-banner {
             background-color: #00205B;
             padding: 15px;
@@ -56,7 +56,7 @@ st.markdown("""
 RULES_FILE = "BASELocks_and_deferred.xlsx"
 
 # =============================================================================
-# 2. CARGA DE DATOS CENTRALIZADA
+# 2. CARGA DE DATOS CENTRALIZADA (Súper velocidad activada)
 # =============================================================================
 @st.cache_data
 def cargar_datos():
@@ -103,7 +103,7 @@ if not st.session_state.autenticado:
 else:
     st.sidebar.success(f"👤 {st.session_state.usuario_actual}")
     
-    # Herramienta interactiva para recargar el Excel en caliente
+    # Herramienta para recargar el Excel si cambiaste un peso
     if st.sidebar.button("🔄 Refrescar Excel (Limpiar Caché)"):
         st.cache_data.clear()
         st.rerun()
@@ -117,7 +117,6 @@ else:
 # 4. MAPA DEL AVIÓN (SIN POSICIÓN A1 - ZONA DE CREW REST MANTENIDA)
 # =============================================================================
 def dibujar_mapa(pos_seleccionada=None):
-    # Diccionario maestro de coordenadas (Posición A1 removida por operaciones)
     posiciones = {
         "A2L": {"x": [1], "y": [13]},  "A2R": {"x": [2], "y": [13]},
         "A3L": {"x": [1], "y": [12]},  "A3R": {"x": [2], "y": [12]},
@@ -135,44 +134,39 @@ def dibujar_mapa(pos_seleccionada=None):
 
     fig = go.Figure()
     
-    # 1. Trazo del Fuselaje del Avión
+    # Fuselaje
     path_avion = "M 0.4, 1.5 L 0.4, 14.0 Q 1.5, 16.0 2.6, 14.0 L 2.6, 1.5 Q 1.5, -0.5 0.4, 1.5 Z"
     fig.add_shape(
-        type="path", path=path_avion,
-        line=dict(color="#00205B", width=3),
-        fillcolor="#FFFFFF", layer="below"
+        type="path", path=path_avion, line=dict(color="#00205B", width=3), fillcolor="#FFFFFF", layer="below"
     )
     
-    # 2. Zona de Cabina / Módulo Crew Rest
+    # Crew Rest
     fig.add_shape(
         type="path", path="M 0.9, 14.5 Q 1.5, 15.2 2.1, 14.5 L 1.8, 14.2 Q 1.5, 14.7 1.2, 14.2 Z",
         line=dict(color="#00205B", width=1), fillcolor="#00205B", layer="above"
     )
     fig.add_annotation(
-        x=1.5, y=14.8, text="CREW<br>REST", showarrow=False,
-        font=dict(size=8, color="white", family="Arial Black")
+        x=1.5, y=14.8, text="CREW<br>REST", showarrow=False, font=dict(size=8, color="white", family="Arial Black")
     )
     
-    # 3. Indicador de Puerta de Carga Principal (Main Cargo Door)
+    # Cargo Door
     fig.add_shape(
-        type="rect", x0=0.3, y0=12.5, x1=0.45, y1=13.8,
-        line=dict(color="#E12D39", width=2), fillcolor="#E12D39", layer="above"
+        type="rect", x0=0.3, y0=12.5, x1=0.45, y1=13.8, line=dict(color="#E12D39", width=2), fillcolor="#E12D39", layer="above"
     )
     fig.add_annotation(
-        x=-0.2, y=13.1, text="CARGO<br>DOOR", showarrow=False, 
-        font=dict(size=8, color="#E12D39", family="Arial Black")
+        x=-0.2, y=13.1, text="CARGO<br>DOOR", showarrow=False, font=dict(size=8, color="#E12D39", family="Arial Black")
     )
 
-    # 4. Renderizado dinámico de Paletas Comerciales
+    # Renderizado dinámico de Paletas Comerciales
     for nombre, datos in posiciones.items():
         if pos_seleccionada == nombre:
-            color = "#E12D39"  # Si está seleccionada, cambia a Rojo Coral LATAM
+            color = "#E12D39"  # Rojo Coral LATAM
             line_color = "#00205B"
             line_width = 3
         else:
-            if "L" in nombre: color = "#00205B"      # Lado Izquierdo: Azul Índigo
-            elif "R" in nombre: color = "#5C768D"    # Lado Derecho: Azul Slate
-            else: color = "#4A5568"                  # Posición Trasera A17: Gris
+            if "L" in nombre: color = "#00205B"      
+            elif "R" in nombre: color = "#5C768D"    
+            else: color = "#4A5568"                  
             line_color = "white"
             line_width = 1.5
 
@@ -194,13 +188,12 @@ def dibujar_mapa(pos_seleccionada=None):
     return fig
 
 # =============================================================================
-# 5. MOTOR INTELIGENTE DE RESTRICCIONES (CRUCE E IMPEDIMENTO DE FILA 1)
+# 5. MOTOR INTELIGENTE DE RESTRICCIONES
 # =============================================================================
 def calcular_impacto(df_mapa, df_restricciones, avion_tipo, pos_vista, conteo_danos):
     resultados_finales = []
     model = "767-300BCF" if avion_tipo == "BCF" else "767-300F"
     
-    # Traducción de contextos para la base de datos
     if avion_tipo == "BCF":
         contexto_buscar = "BCF Side-by-Side" if "L" in pos_vista or "R" in pos_vista else "BCF Centerline"
         pos_mapa = pos_vista 
@@ -212,7 +205,6 @@ def calcular_impacto(df_mapa, df_restricciones, avion_tipo, pos_vista, conteo_da
     lados_rotos = [lado for lado, qty in conteo_danos.items() if qty > 0]
 
     for lado in lados_rotos:
-        # Validación 1: Regla Crítica del manual (2 seguros rotos en el mismo lado)
         if conteo_danos[lado] >= 2:
             resultados_finales.append({
                 "tipo": "alerta_critica", "posicion": pos_vista, "lado_perdido": lado, "kg": 0,
@@ -220,7 +212,7 @@ def calcular_impacto(df_mapa, df_restricciones, avion_tipo, pos_vista, conteo_da
             })
             continue 
 
-        # Validación 2: Impacto Directo de Peso
+        # Impacto Directo de Peso
         candidatos_peso_directo = df_restricciones[
             (df_restricciones["Model"] == model) & 
             ((df_restricciones["Pos"] == pos_vista) | (df_restricciones["Pos"] == pos_vista.replace("A", "")))
@@ -235,7 +227,7 @@ def calcular_impacto(df_mapa, df_restricciones, avion_tipo, pos_vista, conteo_da
                     "origen": "Daño directo reportado"
                 })
 
-        # Validación 3: Cruce Inverso y Efecto Dominó (Seguros centrales/compartidos)
+        # Cruce Inverso y Efecto Dominó
         seguro_buscado = df_mapa[
             (df_mapa["ULD_Pos_ID"] == pos_mapa) & 
             (df_mapa["Side_Affected"] == lado) &
@@ -252,8 +244,6 @@ def calcular_impacto(df_mapa, df_restricciones, avion_tipo, pos_vista, conteo_da
             
             for index, fila in afectados.iterrows():
                 pos_afectada_mapa = fila["ULD_Pos_ID"]
-                
-                # Bloqueo de seguridad: Evitar arrastrar restricciones a la fila 1 (Crew Rest)
                 if pos_afectada_mapa in ["A1", "1"]:
                     continue
                     
@@ -275,7 +265,6 @@ def calcular_impacto(df_mapa, df_restricciones, avion_tipo, pos_vista, conteo_da
                             "kg": float(fila_peso_comp[col_name_comp]), "origen": "Efecto dominó (Seguro central compartido)"
                         })
 
-    # Filtrar posibles duplicados en las consultas
     resultados_unicos = []
     vistos = set()
     for r in resultados_finales:
@@ -322,8 +311,10 @@ if st.session_state.autenticado:
                     if f1.toggle("FWD Inboard"): danos_por_lado["FWD"] += 1
                     if f2.toggle("FWD Outboard"): danos_por_lado["FWD"] += 1
                     
-                    st.markdown("""<div style='background-color:#00205B; border:2px solid #E12D39; border-radius:6px; height:110px; display:flex; align-items:center; justify-content:center; margin: 10px 0;'>
-                    <span style='color: #FFFFFF !important; font-family: \"Arial Black\", sans-serif; font-size: 20px; font-weight: bold; margin:0;'>PALETA ULD</span>
+                    # AQUÍ ESTÁ EL AJUSTE EXACTO PARA QUE EL TEXTO "PALETA ULD" SEA SIEMPRE BLANCO
+                    st.markdown("""
+                    <div style='background-color:#00205B; border:2px solid #E12D39; border-radius:6px; height:110px; display:flex; align-items:center; justify-content:center; margin: 10px 0;'>
+                        <div style='color:#FFFFFF !important; font-family: "Arial Black", sans-serif; font-size: 18px; font-weight: 900;'>PALETA ULD</div>
                     </div>
                     """, unsafe_allow_html=True)
 
