@@ -3,63 +3,76 @@ import pandas as pd
 import plotly.graph_objects as go
 
 # =============================================================================
-# 1. CONFIGURACIÓN
+# 1. CONFIGURACIÓN INICIAL
 # =============================================================================
 st.set_page_config(page_title="LATAM - Seguros 767", page_icon="✈️", layout="wide")
-st.title("✈️ Calculadora de Restricciones 767")
+st.title("✈️ Calculadora Inteligente de Restricciones 767")
 
-# Nombre del archivo actualizado
 RULES_FILE = "Locks_and_deferred.xlsx"
-RULES_SHEET = "ULD_Restrictions"
 
 # =============================================================================
-# 2. CARGA DE REGLAS
+# 2. CARGA DE DATOS LOCALES
 # =============================================================================
 @st.cache_data
-def cargar_reglas():
-    # Leemos directamente de tu nuevo archivo
-    df = pd.read_excel(RULES_FILE, sheet_name=RULES_SHEET)
-    # Limpiamos nombres de columnas por si acaso
-    df.columns = [c.strip() for c in df.columns]
-    return df
+def cargar_datos():
+    try:
+        # Cargamos las 3 pestañas que necesitamos por ahora
+        df_users = pd.read_excel(RULES_FILE, sheet_name="Users")
+        df_restricciones = pd.read_excel(RULES_FILE, sheet_name="ULD_Restrictions")
+        df_mapa = pd.read_excel(RULES_FILE, sheet_name="Restraint_ULD_Map")
+        
+        # Limpiamos los nombres de las columnas quitando espacios extra
+        df_users.columns = [c.strip() for c in df_users.columns]
+        df_restricciones.columns = [c.strip() for c in df_restricciones.columns]
+        df_mapa.columns = [c.strip() for c in df_mapa.columns]
+        
+        return df_users, df_restricciones, df_mapa
+    except Exception as e:
+        st.error(f"Error al leer el archivo Excel: {e}")
+        return None, None, None
 
-rules_df = cargar_reglas()
+df_users, rules_df, map_df = cargar_datos()
 
 # =============================================================================
-# 3. LOGIN SIMPLE
+# 3. LOGIN VALIDADO CON LA BASE DE DATOS
 # =============================================================================
-st.sidebar.image(
-    "https://upload.wikimedia.org/wikipedia/commons/thumb/e/e0/LATAM_logo.svg/1024px-LATAM_logo.svg.png",
-    width=150
-)
+st.sidebar.image("https://upload.wikimedia.org/wikipedia/commons/thumb/e/e0/LATAM_logo.svg/1024px-LATAM_logo.svg.png", width=150)
 st.sidebar.header("🔐 Acceso Corporativo")
-
-correo = st.sidebar.text_input("Correo Institucional:")
-password = st.sidebar.text_input("Contraseña:", type="password")
-btn_login = st.sidebar.button("Iniciar Sesión")
 
 if "autenticado" not in st.session_state:
     st.session_state.autenticado = False
 
-if btn_login:
-    if correo.endswith("@latam.com") and password != "":
-        st.session_state.autenticado = True
-        st.sidebar.success("Acceso autorizado.")
-    elif correo and not correo.endswith("@latam.com"):
-        st.sidebar.error("Acceso denegado. Debe usar correo de LATAM.")
+if not st.session_state.autenticado:
+    correo = st.sidebar.text_input("Correo Institucional (Ej: nombre@latam.com):")
+    btn_login = st.sidebar.button("Iniciar Sesión")
+
+    if btn_login:
+        if df_users is not None:
+            # Buscamos si el correo existe en la pestaña "Users"
+            usuario_valido = df_users[df_users['User_Email'].str.lower() == correo.lower()]
+            
+            if not usuario_valido.empty:
+                st.session_state.autenticado = True
+                st.session_state.usuario_actual = usuario_valido.iloc[0]['User_Name']
+                st.rerun() # Recarga la página
+            else:
+                st.sidebar.error("Acceso denegado. Correo no registrado en la base de datos.")
+else:
+    st.sidebar.success(f"Hola, {st.session_state.usuario_actual}")
+    if st.sidebar.button("Cerrar Sesión"):
+        st.session_state.autenticado = False
+        st.rerun()
 
 # =============================================================================
-# 4. MAPA (NO MODIFICADO)
+# 4. MAPA VISUAL
 # =============================================================================
 def dibujar_mapa():
+    # Posiciones base (usaremos la nomenclatura BCF para el dibujo, luego la traducimos si es Freighter)
     posiciones = {
         "A1": {"x": [1.5], "y": [10]},
-        "A2L": {"x": [1], "y": [9]},
-        "A2R": {"x": [2], "y": [9]},
-        "A3L": {"x": [1], "y": [8]},
-        "A3R": {"x": [2], "y": [8]},
-        "A10L": {"x": [1], "y": [4]},
-        "A10R": {"x": [2], "y": [4]},
+        "A2L": {"x": [1], "y": [9]},  "A2R": {"x": [2], "y": [9]},
+        "A3L": {"x": [1], "y": [8]},  "A3R": {"x": [2], "y": [8]},
+        "A10L": {"x": [1], "y": [4]}, "A10R": {"x": [2], "y": [4]},
         "A14": {"x": [1.5], "y": [2]},
     }
 
@@ -67,74 +80,94 @@ def dibujar_mapa():
     for nombre, datos in posiciones.items():
         color = "royalblue" if "L" in nombre else ("orange" if "R" in nombre else "green")
         fig.add_trace(go.Scatter(
-            x=datos["x"],
-            y=datos["y"],
+            x=datos["x"], y=datos["y"],
             mode="markers+text",
             marker=dict(size=45, symbol="square", color=color, line=dict(width=2, color="white")),
             text=[nombre],
             textposition="middle center",
             textfont=dict(color="white", size=12),
-            name=f"Posición {nombre}",
             customdata=[nombre],
-            hoverinfo="text"
+            hoverinfo="none"
         ))
 
     fig.update_layout(
         title="Plano Main Deck",
         xaxis=dict(showgrid=False, range=[0, 3], visible=False),
         yaxis=dict(showgrid=False, range=[0, 11], visible=False),
-        width=300,
-        height=500,
-        plot_bgcolor="white",
-        showlegend=False,
-        margin=dict(l=0, r=0, t=30, b=0),
-        clickmode="event+select",
+        width=300, height=500, plot_bgcolor="white", showlegend=False,
+        margin=dict(l=0, r=0, t=30, b=0), clickmode="event+select",
     )
     return fig
 
 # =============================================================================
-# 5. MOTOR DE REGLAS (AJUSTADO A NUEVO EXCEL)
+# 5. MOTOR INTELIGENTE DE RESTRICCIONES (BÚSQUEDA INVERSA)
 # =============================================================================
-def resolver_restriccion(df, model, position, missing_sides):
-    # Regla: Si hay más de un seguro dañado, no se puede cargar
-    if len(missing_sides) > 1:
-        return {
-            "status": "NO_LOAD", 
-            "kg": 0, 
-            "text": "Más de un restraint dañado: la posición no puede cargarse."
-        }
+def calcular_impacto(df_mapa, df_restricciones, avion_tipo, pos_vista, lados_rotos):
+    resultados_finales = []
     
-    if len(missing_sides) == 0:
-        return {"status": "NORMAL", "kg": None, "text": "Operación normal."}
+    # 1. Ajustar el nombre de la posición y el contexto según el tipo de avión
+    if avion_tipo == "BCF":
+        model = "767-300BCF"
+        contexto_buscar = "BCF Side-by-Side"
+        pos_real = pos_vista # Ej: A2L
+    else:
+        model = "767-300F"
+        contexto_buscar = "F Side-by-Side"
+        # Si el mapa dice "A2L", para Freighter en la base de datos suele ser "2L"
+        pos_real = pos_vista.replace("A", "") 
 
-    # Filtrar por Modelo y Posición
-    candidatos = df[(df["Model"] == model) & (df["Pos"] == position)]
+    # Evaluamos cada lado que el COT reportó como dañado
+    for lado in lados_rotos:
+        # 2. BÚSQUEDA INVERSA: ¿Qué seguro físico está tocando realmente?
+        seguro_buscado = df_mapa[
+            (df_mapa["ULD_Pos_ID"] == pos_real) & 
+            (df_mapa["Side_Affected"] == lado) &
+            (df_mapa["Config_Context"].str.contains(contexto_buscar, na=False))
+        ]
+        
+        if seguro_buscado.empty:
+            resultados_finales.append({"tipo": "error", "texto": f"No se encontró el seguro {lado} para {pos_real} en el mapa."})
+            continue
 
-    if candidatos.empty:
-        return {
-            "status": "REVIEW", 
-            "kg": None, 
-            "text": f"No se encontró la posición {position} para el modelo {model}."
-        }
+        # Extraemos el ID del seguro físico
+        seguro_fisico_id = seguro_buscado.iloc[0]["Restraint_Fisico_ID"]
+        
+        # 3. EFECTO DOMINÓ: ¿A qué otras posiciones afecta este seguro?
+        afectados = df_mapa[
+            (df_mapa["Restraint_Fisico_ID"] == seguro_fisico_id) &
+            (df_mapa["Config_Context"].str.contains(contexto_buscar, na=False))
+        ]
+        
+        # 4. Buscamos el peso para las posiciones afectadas
+        for index, fila in afectados.iterrows():
+            pos_afectada = fila["ULD_Pos_ID"]
+            lado_afectado = fila["Side_Affected"]
+            
+            # Buscar en ULD_Restrictions
+            candidatos_peso = df_restricciones[(df_restricciones["Model"] == model) & (df_restricciones["Pos"] == pos_afectada)]
+            
+            if candidatos_peso.empty:
+                resultados_finales.append({"tipo": "warning", "texto": f"Faltan datos de peso para {pos_afectada}."})
+                continue
+                
+            fila_peso = candidatos_peso.iloc[0]
+            col_map = {"FWD": "FWD_kg", "AFT": "AFT_kg", "LEFT": "LEFT_kg", "RIGHT": "RIGHT_kg"}
+            col_name = col_map.get(lado_afectado)
+            
+            if col_name and pd.notna(fila_peso[col_name]):
+                peso = float(fila_peso[col_name])
+                resultados_finales.append({
+                    "tipo": "alerta",
+                    "posicion": pos_afectada,
+                    "lado_perdido": lado_afectado,
+                    "kg": peso,
+                    "origen": f"Daño reportado en {pos_real} ({lado})"
+                })
 
-    fila = candidatos.iloc[0]
-    side = missing_sides[0] # FWD, AFT, LEFT, RIGHT
-
-    # Mapeo de lados a columnas del Excel (FWD_kg, AFT_kg, etc.)
-    col_map = {"FWD": "FWD_kg", "AFT": "AFT_kg", "LEFT": "LEFT_kg", "RIGHT": "RIGHT_kg"}
-    col_name = col_map.get(side)
-
-    if col_name and col_name in fila and pd.notna(fila[col_name]):
-        return {
-            "status": "OK", 
-            "kg": float(fila[col_name]), 
-            "text": f"Restricción encontrada: {fila[col_name]} kg."
-        }
-    
-    return {"status": "REVIEW", "kg": None, "text": "No hay restricción definida para ese lado específico."}
+    return resultados_finales
 
 # =============================================================================
-# 6. APP
+# 6. INTERFAZ PRINCIPAL DE LA APP
 # =============================================================================
 if st.session_state.autenticado:
     st.write("---")
@@ -150,23 +183,16 @@ if st.session_state.autenticado:
 
     with col2:
         st.subheader("Configuración de Falla")
-
-        avion = st.selectbox(
-            "**PASO 2:** Tipo de Aeronave:",
-            ["Seleccionar...", "Freighter F (Ej: CC-CXA)", "Convertido BCF"]
-        )
+        avion = st.selectbox("**PASO 2:** Tipo de Aeronave:", ["Seleccionar...", "Freighter", "BCF"])
 
         if avion != "Seleccionar...":
             if not pos_seleccionada:
                 st.warning("👈 Selecciona una posición del mapa de la izquierda.")
             else:
-                # Determinación del Modelo para el filtro
-                model = "767-300F" if avion.startswith("Freighter") else "767-300BCF"
-
-                st.success(f"📍 Analizando la **{pos_seleccionada}** en {model}")
+                st.success(f"📍 Posición seleccionada: **{pos_seleccionada}**")
 
                 st.markdown("### 🔍 Radiografía de la Paleta")
-                st.info("**PASO 3:** Selecciona los seguros inoperativos:")
+                st.info("**PASO 3:** Selecciona los seguros que ves inoperativos:")
 
                 inoperativos = []
                 c_izq, c_centro, c_der = st.columns([1, 2, 1])
@@ -178,8 +204,8 @@ if st.session_state.autenticado:
                     if f2.toggle("FWD Outboard"): inoperativos.append("FWD")
                     
                     st.markdown("""
-                    <div style='background-color:#d9e2ec; border:3px dashed #627d98; border-radius:10px; height:180px; display:flex; align-items:center; justify-content:center; flex-direction:column; margin: 15px 0;'>
-                        <h2 style='color:#102a43; margin:0;'>📦 PALETA</h2>
+                    <div style='background-color:#d9e2ec; border:3px dashed #627d98; border-radius:10px; height:120px; display:flex; align-items:center; justify-content:center; flex-direction:column; margin: 10px 0;'>
+                        <h3 style='color:#102a43; margin:0;'>📦 PALETA</h3>
                     </div>
                     """, unsafe_allow_html=True)
 
@@ -189,30 +215,31 @@ if st.session_state.autenticado:
                     st.markdown("<div style='text-align:center;'><b>⬇️ ATRÁS (AFT) ⬇️</b></div>", unsafe_allow_html=True)
 
                 with c_izq:
-                    st.write("<div style='height: 90px;'></div>", unsafe_allow_html=True)
+                    st.write("<div style='height: 70px;'></div>", unsafe_allow_html=True)
                     if st.toggle("Lateral LEFT"): inoperativos.append("LEFT")
-                    st.write("<div style='height: 10px;'></div>", unsafe_allow_html=True)
+                
+                with c_der:
+                    st.write("<div style='height: 70px;'></div>", unsafe_allow_html=True)
                     if st.toggle("Lateral RIGHT"): inoperativos.append("RIGHT")
 
-                # Cálculo
-                resultado = resolver_restriccion(
-                    rules_df,
-                    model=model,
-                    position=pos_seleccionada,
-                    missing_sides=list(set(inoperativos)) # set para evitar duplicados
-                )
-
-                if resultado["status"] == "NORMAL":
-                    st.success("✅ TODOS LOS SEGUROS OPERATIVOS.")
-                elif resultado["status"] == "OK":
-                    st.error("🚨 ALERTA DE RESTRICCIÓN")
-                    st.markdown(f"#### Restricción Aplicada: **{resultado['kg']:.0f} kg**")
-                    st.markdown(f"**Motivo:** {resultado['text']}")
-                elif resultado["status"] == "NO_LOAD":
-                    st.error("🚨 NO LOAD")
-                    st.markdown(f"**Motivo:** {resultado['text']}")
-                else:
-                    st.warning(resultado["text"])
-
-else:
-    st.info("👈 Inicie sesión en el menú lateral para utilizar la herramienta.")
+                # =================================================================
+                # BOTÓN DE ANÁLISIS
+                # =================================================================
+                if st.button("🚨 Analizar Impacto de Daños", type="primary"):
+                    if len(inoperativos) == 0:
+                        st.success("✅ No hay seguros inoperativos. Posición OK para cargar.")
+                    else:
+                        inoperativos_unicos = list(set(inoperativos)) # Quitamos duplicados
+                        alertas = calcular_impacto(map_df, rules_df, avion, pos_seleccionada, inoperativos_unicos)
+                        
+                        st.markdown("---")
+                        st.subheader("📋 Resumen de Restricciones (Efecto Dominó)")
+                        
+                        # Agrupar alertas para mostrarlas bonito
+                        for alerta in alertas:
+                            if alerta["tipo"] == "alerta":
+                                st.error(f"📍 **Penalización en Posición {alerta['posicion']}**")
+                                st.markdown(f"> Pierde seguro **{alerta['lado_perdido']}** debido a {alerta['origen']}.")
+                                st.markdown(f"> **Peso Máximo Permitido:** `{alerta['kg']} kg`")
+                            else:
+                                st.warning(alerta["texto"])
